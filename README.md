@@ -9,6 +9,7 @@ Game-to-Agent：游戏与玩家伙伴 Agent 的独立双向交互协议。当前
 - [完整目标与实施台账](docs/IMPLEMENTATION_PLAN.md)
 - [参考 A2A 的对外发布路线](docs/PUBLISHING.md)
 - [本地发现与连接授权草案](docs/CONNECTIONS.md)
+- [已登记应用的跨进程配对与授权](docs/LOCAL_PAIRING.md)
 - [无需游戏监听端口的出站桥接](docs/OUTBOUND.md)
 - [贡献规则](CONTRIBUTING.md) 与 [安全边界](SECURITY.md)
 
@@ -66,3 +67,9 @@ python examples/godot_demo.py --godot /path/to/godot --output /path/to/new-outpu
 运行 `python examples/outbound_demo.py`，由桥接、独立 Python 游戏和 Node 伙伴完成真实三进程交互。游戏进程禁止 `socket.bind`，无需监听入站端口；外层游戏/伙伴令牌与内层邀请/会话凭据分离。Python 与 JavaScript 都提供 `BridgeClient`，复用已有协议语义。详见 [出站桥接说明](docs/OUTBOUND.md)。
 
 这提供云端部署所需的出站传输参考，不是已部署的云端产品。桥接是能读取会话数据的可信终点；生产 TLS、身份委托、授权控制面、并发限制与持久化仍需实现。现有 TLS 用例验证本地 TLS 信任与主机名，不证明公网/NAT 场景。
+
+## 独立进程之间的配对
+
+运行 `python examples/process_pairing.py --entry game`，在控制台查看完整条件并输入“允许”，才启动已登记的伙伴进程并加入游戏；拒绝时不启动伙伴。`--entry desktop` 验证伙伴已运行时的申请路径。默认使用独立 JavaScript 伙伴，`--agent python` 可验证 Python 实现。
+
+这复用原授权协调器，新增角色认证、申请所有权隔离、范围绑定和幂等领取，而不是把审批接口交给伙伴。身份来自可信启动器登记；并非陌生应用自动认证、全机扫描、强本机隔离或完整云端审批。详见 [跨进程配对说明](docs/LOCAL_PAIRING.md)。

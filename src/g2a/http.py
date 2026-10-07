@@ -53,8 +53,10 @@ def handler_for(host, *, dispatch_override=None):
                 if url.scheme or url.netloc or url.fragment:
                     raise ProtocolError("invalid_route", "Relative request target required")
                 if dispatch_override is not None:
-                    self.reply(200, dispatch_override(self, method))
-                    return
+                    result = dispatch_override(self, method)
+                    if result is not NotImplemented:
+                        self.reply(200, result)
+                        return
                 parts = url.path.strip("/").split("/")
                 token = self.headers.get("Authorization", "")
                 token = token[7:] if token.startswith("Bearer ") else ""

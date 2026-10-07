@@ -78,7 +78,8 @@ class GameHost:
         with self.lock:
             return fingerprint(dict(descriptor=self.descriptor, revision=self.revision))
 
-    def invite(self, agent_id, player_id, *, team=(), allowed_actions=(), ttl=120, expected_state=None):
+    def invite(self, agent_id, player_id, *, team=(), allowed_actions=(), ttl=120,
+               expected_state=None, expected_request=None):
         """由宿主在用户确认或既有自动加入授权之后调用，不能由 Agent 自授。"""
         with self.lock:
             if expected_state is not None and expected_state != self.authorization_state():
@@ -89,10 +90,15 @@ class GameHost:
                 raise ProtocolError("invalid_identity", "Roles require distinct identities")
             if not set(allowed_actions) <= self.capabilities.keys():
                 raise ProtocolError("permission_denied", "Invitation exceeds game capabilities", 403)
+            request_mark = None
+            if expected_request is not None:
+                validate("join", expected_request)
+                request_mark = fingerprint(expected_request)
             token = secrets.token_urlsafe(32)
             self.invitations[token] = dict(agent=agent_id, player=player_id, team=set(team) | {player_id},
                                            permissions=set(allowed_actions), expires=self.clock() + ttl,
-                                           session=None, fingerprint=None, expected_state=expected_state)
+                                           session=None, fingerprint=None, expected_state=expected_state,
+                                           expected_request=request_mark)
             return token
 
     def join(self, token, request):
@@ -116,6 +122,8 @@ class GameHost:
                 return self._joined(s)
             if invitation.get("expected_state") is not None and invitation["expected_state"] != self.authorization_state():
                 raise ProtocolError("approval_stale", "Game conditions changed after approval", 409)
+            if invitation.get("expected_request") is not None and invitation["expected_request"] != mark:
+                raise ProtocolError("approval_stale", "Join request changed after approval", 409)
             if len(self.sessions) >= 64:
                 raise ProtocolError("resource_limit", "Session capacity reached", 429)
             for previous in self.sessions.values():

@@ -1044,6 +1044,252 @@
         "cursor"
       ],
       "additionalProperties": false
+    },
+    "pairing_request": {
+      "type": "object",
+      "properties": {
+        "nonce": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "request": {
+          "$ref": "#/$defs/join"
+        }
+      },
+      "required": [
+        "nonce",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    "pairing_decision": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "allow": {
+          "type": "boolean"
+        },
+        "remember": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scope",
+        "allow",
+        "remember"
+      ],
+      "additionalProperties": false
+    },
+    "pairing_redemption": {
+      "type": "object",
+      "properties": {
+        "desktop_visible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "desktop_visible"
+      ],
+      "additionalProperties": false
+    },
+    "pairing_ticket": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "invitation": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{32,512}$"
+        },
+        "request": {
+          "$ref": "#/$defs/join"
+        }
+      },
+      "required": [
+        "endpoint",
+        "invitation",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    "pairing_offer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "game_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "agent_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "player_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "state": {
+          "enum": [
+            "awaiting_approval",
+            "authorized",
+            "connecting",
+            "connected",
+            "closed",
+            "denied",
+            "failed"
+          ]
+        },
+        "initiated_by": {
+          "enum": [
+            "desktop",
+            "game"
+          ]
+        },
+        "launch_required": {
+          "type": "boolean"
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "game_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          },
+          "maxItems": 128
+        },
+        "presentation": {
+          "enum": [
+            "hide_desktop",
+            "coexist",
+            "user_choice"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "request": {
+          "$ref": "#/$defs/join"
+        },
+        "descriptor": {
+          "$ref": "#/$defs/descriptor"
+        }
+      },
+      "required": [
+        "id",
+        "game_id",
+        "agent_id",
+        "player_id",
+        "state",
+        "initiated_by",
+        "launch_required",
+        "endpoint",
+        "game_name",
+        "actions",
+        "presentation",
+        "scope",
+        "request",
+        "descriptor"
+      ],
+      "additionalProperties": false
+    },
+    "pairing_page": {
+      "type": "object",
+      "properties": {
+        "requests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "game_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "agent_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "player_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "state": {
+                "enum": [
+                  "awaiting_approval",
+                  "authorized",
+                  "connecting",
+                  "connected",
+                  "closed",
+                  "denied",
+                  "failed"
+                ]
+              },
+              "initiated_by": {
+                "enum": [
+                  "desktop",
+                  "game"
+                ]
+              },
+              "launch_required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "game_id",
+              "agent_id",
+              "player_id",
+              "state",
+              "initiated_by",
+              "launch_required"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "requests"
+      ],
+      "additionalProperties": false
+    },
+    "pairing_discovery": {
+      "type": "object",
+      "properties": {
+        "games": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/descriptor"
+          },
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "games"
+      ],
+      "additionalProperties": false
     }
   },
   "oneOf": [

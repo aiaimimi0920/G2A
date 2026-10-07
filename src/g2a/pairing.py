@@ -1,11 +1,15 @@
 """可信本地连接协调器；不是公开注册服务或跨供应商身份提供者。"""
 from copy import deepcopy
+import json
 import secrets
 import time
 
 from .client import Client
 from .runtime import fingerprint
 from .validation import ProtocolError, validate
+
+
+REQUEST_TTL = 60
 
 
 class PairingCoordinator:
@@ -59,18 +63,36 @@ class PairingCoordinator:
                 game_name=host.descriptor['name'], agent_id=request['agent_id'], player_id=request['player_id'],
                 actions=list(request['allowed_actions']), presentation=host.descriptor['presentation'],
                 initiated_by=initiated_by, launch_required=not companion_running,
-                state='authorized' if companion_running and scope in self.grants else 'awaiting_approval')
+                state='authorized' if companion_running and scope in self.grants else 'awaiting_approval',
+                scope=scope, request=deepcopy(request), descriptor=deepcopy(host.descriptor))
+        if len(json.dumps(offer, ensure_ascii=False).encode('utf-8')) > 196608:
+            raise ProtocolError('message_too_large', 'Consent snapshot exceeds local binding limit', 413)
         self.pending[offer['id']] = dict(offer=offer, request=deepcopy(request), scope=scope,
-                                          expires=self.clock() + 60)
+                                          expires=self.clock() + REQUEST_TTL)
         return deepcopy(offer)
 
-    def _get(self, request_id):
+    def _lookup(self, request_id):
         pending = self.pending.get(request_id)
         if pending is None or self.clock() >= pending['expires']:
             raise ProtocolError('request_expired', 'Connection request expired', 409)
+        return pending
+
+    def _get(self, request_id):
+        pending = self._lookup(request_id)
         if pending['scope'] != self._scope(pending['offer']['game_id'], pending['request']):
             raise ProtocolError('approval_stale', 'Game or requested capabilities changed; ask again', 409)
         return pending
+
+    def offer(self, request_id):
+        pending = self._lookup(request_id)
+        if 'ticket' in pending:
+            host, _, _ = self.games[pending['offer']['game_id']]
+            with host.lock:
+                invitation = host.invitations.get(pending['ticket']['invitation'])
+                if invitation and invitation['session']:
+                    session = host.sessions[invitation['session']]
+                    pending['offer']['state'] = 'closed' if session.state == 'closed' else 'connected'
+        return deepcopy(pending['offer'])
 
     def approve(self, request_id, *, remember=False):
         pending = self._get(request_id)
@@ -81,7 +103,8 @@ class PairingCoordinator:
             self.grants.add(pending['scope'])
 
     def deny(self, request_id):
-        pending = self._get(request_id)
+        # 拒绝不授予权限；游戏条件变化不应阻止玩家关闭旧询问。
+        pending = self._lookup(request_id)
         if pending['offer']['state'] not in {'awaiting_approval', 'authorized'}:
             raise ProtocolError('invalid_decision', 'Request is no longer pending', 409)
         pending['offer']['state'] = 'denied'
@@ -93,27 +116,40 @@ class PairingCoordinator:
             if pending['offer']['state'] == 'authorized':
                 pending['offer']['state'] = 'awaiting_approval'
 
-    def connect(self, request_id, *, desktop_visible=None):
-        pending = self._get(request_id)
+    def prepare(self, request_id, *, desktop_visible=None):
+        """只给已认证的对应伙伴调用；为独立客户端准备一次性、可重取的邀请。"""
+        pending = self._lookup(request_id)
+        if desktop_visible is not None and not isinstance(desktop_visible, bool):
+            raise ProtocolError('invalid_message', 'Desktop visibility must be a boolean')
+        if 'ticket' in pending:
+            if desktop_visible is not None and desktop_visible != pending['ticket']['request']['desktop_visible']:
+                raise ProtocolError('redemption_conflict', 'Retry must preserve the connection snapshot', 409)
+            return deepcopy(pending['ticket'])
         if pending['offer']['state'] != 'authorized':
             raise ProtocolError('consent_required', 'User approval is required before joining', 403)
-        game_id = pending['offer']['game_id']
-        host, endpoint, _ = self.games[game_id]
+        host, endpoint, _ = self.games[pending['offer']['game_id']]
         request = deepcopy(pending['request'])
         if desktop_visible is not None:
-            if not isinstance(desktop_visible, bool):
-                raise ProtocolError('invalid_message', 'Desktop visibility must be a boolean')
             request['desktop_visible'] = desktop_visible
         # 将授权范围复核与邀请创建置于同一个宿主锁内。
         with host.lock:
             self._get(request_id)
             invitation = host.invite(request['agent_id'], request['player_id'],
-                                     allowed_actions=request['allowed_actions'], ttl=30,
-                                     expected_state=host.authorization_state())
-        client = Client(endpoint, expected_game_id=game_id)
+                                     allowed_actions=request['allowed_actions'],
+                                     ttl=min(30, pending['expires'] - self.clock()),
+                                     expected_state=host.authorization_state(), expected_request=request)
+        pending['ticket'] = dict(endpoint=endpoint, invitation=invitation, request=request)
         pending['offer']['state'] = 'connecting'
+        return deepcopy(pending['ticket'])
+
+    def connect(self, request_id, *, desktop_visible=None):
+        pending = self._get(request_id)
+        if pending['offer']['state'] != 'authorized':
+            raise ProtocolError('consent_required', 'User approval is required before joining', 403)
+        ticket = self.prepare(request_id, desktop_visible=desktop_visible)
+        client = Client(ticket['endpoint'], expected_game_id=pending['offer']['game_id'])
         try:
-            client.join(invitation, request)
+            client.join(ticket['invitation'], ticket['request'])
         except Exception:
             pending['offer']['state'] = 'failed'
             raise
