@@ -11,8 +11,14 @@ jobs:
         include:
           - os: ubuntu-latest
             python: '3.11'
+            godot_archive: Godot_v4.5.1-stable_linux.x86_64.zip
+            godot_binary: Godot_v4.5.1-stable_linux.x86_64
+            godot_sha512: 5bccbed65a94b82c7c319fdb15719ee8113a6e503976cc54e16f1c61fe95f3d74e5e40b8449b5bb89ff7f424574c20af01a4f5ef08b389e4dc338b245185b0b9
           - os: windows-latest
             python: '3.12'
+            godot_archive: Godot_v4.5.1-stable_win64.exe.zip
+            godot_binary: Godot_v4.5.1-stable_win64_console.exe
+            godot_sha512: ab84df90ead5a888530faaabe744a27678ef7635068883900174fae37f7fc6178d033b551d88963c7dc2466580915a582bbc79aca97c19085900655761f56a27
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     env:
@@ -33,6 +39,29 @@ jobs:
         working-directory: sdk/javascript
       - run: npm pack --pack-destination ${{ runner.temp }}
         working-directory: sdk/javascript
+      - name: Install pinned Godot engine with upstream SHA512
+        shell: pwsh
+        env:
+          GODOT_ARCHIVE: ${{ matrix.godot_archive }}
+          GODOT_BINARY: ${{ matrix.godot_binary }}
+          GODOT_SHA512: ${{ matrix.godot_sha512 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $archive = Join-Path $env:RUNNER_TEMP 'godot.zip'
+          $directory = Join-Path $env:RUNNER_TEMP 'godot'
+          Invoke-WebRequest "https://github.com/godotengine/godot-builds/releases/download/4.5.1-stable/$env:GODOT_ARCHIVE" -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA512).Hash.ToLowerInvariant() -ne $env:GODOT_SHA512) { throw 'Godot checksum mismatch' }
+          Expand-Archive -LiteralPath $archive -DestinationPath $directory
+          $executable = Join-Path $directory $env:GODOT_BINARY
+          if ($IsLinux) { chmod +x $executable; if ($LASTEXITCODE -ne 0) { throw 'chmod failed' } }
+          "GODOT_EXECUTABLE=$executable" >> $env:GITHUB_ENV
+          "G2A_TEST_OUTPUT=$(Join-Path $env:RUNNER_TEMP 'g2a-results')" >> $env:GITHUB_ENV
       - run: python -m unittest discover -s tests -v
       - run: python examples/key_quest.py
       - run: python -m pip wheel . --no-deps --wheel-dir dist
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: godot-evidence-${{ matrix.os }}
+          path: ${{ runner.temp }}/g2a-results

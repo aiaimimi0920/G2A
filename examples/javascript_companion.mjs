@@ -23,7 +23,7 @@ while (Date.now() < deadline && !receivedContext) {
 }
 assert.ok(receivedContext, 'Game context did not arrive');
 await client.send('chat.message', {
-  text: '你撑一下，我去拿钥匙。', channel: 'team', recipients: ['alice', 'bob'],
+  text: config.companion_text ?? '你撑一下，我去拿钥匙。', channel: 'team', recipients: ['alice', 'bob'],
   provenance: {kind: 'shared_experience', source_id: 'hall-1', player_id: 'alice'},
 }, {messageId: 'js-chat'});
 const request = {action: 'find-key', arguments: {room: 'hall'}, capability_revision: client.session.capability_revision};
@@ -37,8 +37,9 @@ while (Date.now() < deadline && !result) {
   result = page.events.find(e => e.message.type === 'action.result')?.message.data;
   if (!result) await new Promise(resolve => setTimeout(resolve, 20));
 }
-assert.equal(result?.status, 'succeeded');
-assert.equal(result.details.item, 'gold-key');
+assert.equal(result?.status, config.expected_action_status ?? 'succeeded');
+if (result.status === 'succeeded') assert.equal(result.details.item, 'gold-key');
+else assert.equal(result.details.reason, 'world_condition');
 await client.leave();
 assert.equal(client.desktopVisible, true);
 process.stdout.write(JSON.stringify({implementation: 'javascript', context_received: receivedContext,

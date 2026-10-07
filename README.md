@@ -10,7 +10,7 @@ Game-to-Agent：游戏与玩家伙伴 Agent 的独立双向交互协议。当前
 - [参考 A2A 的对外发布路线](docs/PUBLISHING.md)
 - [贡献规则](CONTRIBUTING.md) 与 [安全边界](SECURITY.md)
 
-已提供权威 JSON Schema、Python 参考宿主/客户端、独立 JavaScript 客户端、跨进程 HTTP 互通和跨游戏来源记忆示例。仍未冻结消息格式，跨语言测试不代表第三方认证；尚无真实游戏引擎适配或完整云端接入。被 Mot 主仓库引用仅用于集成管理，不影响独立使用和演进。
+已提供权威 JSON Schema、Python 参考宿主/客户端、独立 JavaScript 客户端、跨进程 HTTP 互通、跨游戏来源记忆示例和最小 Godot 游戏适配。仍未冻结消息格式，跨语言测试不代表第三方认证；尚无完整云端接入或生产级引擎 SDK。被 Mot 主仓库引用仅用于集成管理，不影响独立使用和演进。
 
 ## 本地验证
 
@@ -40,5 +40,15 @@ JavaScript 互通测试启动独立 Node 伙伴进程，仅交给它伙伴邀请
 `examples/memory_companion.py` 示范同一伙伴在两个游戏中使用共同经历、玩家讲述和外部参考的来源边界，并按受众约束记忆披露。这不是协议指定的记忆数据库，也不证明持久化身份或云端同步已完成。JavaScript 包说明见 [SDK 文档](sdk/javascript/README.md)，目前仅支持本地打包，尚未发布 npm。
 
 协议结构的权威源为 `src/g2a/schema.json`，语义见规范。请勿把实现中的内存容量限制、尚未开发的发现/云端入口，误认作完整协议目标已经完成。
+
+## 真实 Godot 游戏示例
+
+见 [Godot 接入说明](examples/godot_key_quest/README.md)。Godot 负责世界状态、伙伴移动和钥匙拾取；Python sidecar 负责协议；独立 Node 进程扮演伙伴。运行不需要模型或 Mot 账号：
+
+```sh
+python examples/godot_demo.py --godot /path/to/godot --output /path/to/new-output --window
+```
+
+完整引擎测试另需设置 `GODOT_EXECUTABLE` 和 `G2A_TEST_OUTPUT`。缺少这些配置时引擎测试明确跳过。CI 固定下载并校验官方 Godot 4.5.1，验证成功拾取、世界拒绝、领取前取消和移动中退出。跨进程真实窗口恢复、任意形象导入、游戏内授权入口仍未完成。
 
 本轮保留原仓库已有许可文件，没有另行决定或宣称新的协议规范许可；正式发布前需单独确定。

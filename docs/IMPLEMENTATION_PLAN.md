@@ -58,6 +58,18 @@ R07、R14、R15 获得新增部分证据，仍不整体关闭：身份尚未持�
 
 安装包与测试依赖目录：`C:/Users/Public/nas_home/AI/GameEditor/linshi/g2a-js-20261007/`。公开发布计划见 `PUBLISHING.md`。
 
+## 2026-10-07 真实 Godot 适配检查点
+
+新增 `examples/godot_key_quest/` 和 `examples/godot_demo.py`：Godot 负责场景与游戏效果，Python sidecar 负责协议与授权，独立 Node 伙伴持邀请接入。游戏提供情境，伙伴主动队聊并请求找钥匙，Godot 领取后移动场景伙伴、拾取并报告结果。游戏世界可拒绝已获协议授权的行动。
+
+已在官方 Godot 4.5.1（下载包对照官方 SHA512 校验）运行成功、世界拒绝、领取前取消和移动中退出四条真实引擎用例；全套 Python 37 项无跳过通过，Node 11 项通过。另在有窗口模式运行并检查截图，确认不是仅 headless 逻辑或静态概念图。游戏日志曾暴露退出时未结束的计时协程对象泄漏，改为随场景销毁的 Timer 后消除；验证入口检查脚本错误及 ObjectDB 泄漏日志。按本轮项目路径复核 Godot 进程，未发现残留，不扩大为所有环境的进程树保证。
+
+只读审查发现并修复领取前正常取消/撤权导致游戏崩溃、移动中退出后无条件拾取的问题。当前中途退出保留实际移动、不虚构回滚；终态查询与世界效果并非跨进程原子事务，动态撤权和生产级恢复继续开放。占位圆点不证明模型导入，客户端桌面状态值不证明真实桌面恢复。
+
+R14 已有非 Python 对端及最小引擎互通证据，仍需外部实现者验证和通用适配器演进。R10-R12 的真实桌面、发现/加入 UI 与云端流程未关闭，R16-R17 发布/许可事项仍开放。CI 已加入 Windows/Linux 官方固定引擎下载、SHA512 校验、引擎测试与证据归档，本机 Windows 结果不能代替远端/Linux 结果。
+
+本机证据根目录：`C:/Users/Public/nas_home/AI/GameEditor/linshi/g2a-godot-20261007/`；官方窗口结果位于 `official-window-02/`，包含 `game.png`、`game.json`、`result.json` 和日志。
+
 ## 本次参考证据
 
 2026-10-07 已联网读取 A2A 官方 `README.md`、`CONTRIBUTING.md`、`GOVERNANCE.md`、`specification/`、`docs/specification.md` 及发布工作流。GitHub Latest Release 为 v1.0.1；文档中仍有 v1.0.0 提示，因此稳定参考应固定 release，不以 main 文档标签判断版本。
