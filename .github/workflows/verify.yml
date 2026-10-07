@@ -39,6 +39,13 @@ jobs:
         working-directory: sdk/javascript
       - run: npm pack --pack-destination ${{ runner.temp }}
         working-directory: sdk/javascript
+      - name: Require OpenSSL for ephemeral TLS verification
+        shell: pwsh
+        run: |
+          $openssl = (Get-Command openssl -ErrorAction SilentlyContinue).Source
+          if (!$openssl -and $IsWindows) { $openssl = 'C:\Program Files\Git\usr\bin\openssl.exe' }
+          if (!$openssl -or !(Test-Path -LiteralPath $openssl)) { throw 'OpenSSL is required for TLS tests' }
+          "G2A_OPENSSL=$openssl" >> $env:GITHUB_ENV
       - name: Install pinned Godot engine with upstream SHA512
         shell: pwsh
         env:
@@ -64,6 +71,7 @@ jobs:
           G2A_GUI_TEST: '1'
         run: python -m unittest discover -s tests -p test_pairing_gui.py -v
       - run: python examples/key_quest.py
+      - run: python examples/outbound_demo.py
       - run: python -m pip wheel . --no-deps --wheel-dir dist
       - uses: actions/upload-artifact@v4
         if: always()

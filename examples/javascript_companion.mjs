@@ -11,7 +11,10 @@ for await (const chunk of process.stdin) {
   if (raw.length > 65536) throw new Error('Configuration too large');
 }
 const config = JSON.parse(raw);
-const client = new Client(config.endpoint, {expectedGameId: config.game_id});
+const {BridgeClient} = config.bridge_token ? await import(new URL('./bridge.mjs', moduleUrl).href) : {};
+const client = config.bridge_token
+  ? new BridgeClient(config.endpoint, {expectedGameId: config.game_id, bridgeToken: config.bridge_token})
+  : new Client(config.endpoint, {expectedGameId: config.game_id});
 await client.join(config.invitation, config.request);
 assert.equal(client.desktopVisible, false);
 const deadline = Date.now() + 10000;

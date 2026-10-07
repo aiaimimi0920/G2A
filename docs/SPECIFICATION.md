@@ -15,7 +15,7 @@ Agent 身份可跨游戏延续，但本协议不创建全局账号中心，不�
 
 ## 2. 协议与能力描述
 
-描述文档包含 `protocol`、`game_id`、`name`、`bindings`、`avatar_formats`、`presentation`、`policy`、`actions`，可选 `game_avatar`。版本字符串当前必须精确匹配 `0.1.0-dev`，未知版本返回 `version_not_supported`；不得静默按别的版本解释。
+描述文档包含 `protocol`、`game_id`、`name`、`bindings`、`avatar_formats`、`presentation`、`policy`、`actions`，可选 `game_avatar`。`bindings` 为非空、不重复的 `http-poll` / `outbound-poll` 集合，只声明实际提供的绑定。版本字符串当前必须精确匹配 `0.1.0-dev`，未知版本返回 `version_not_supported`；不得静默按别的版本解释。
 
 能力由游戏开放。每个 action 包含 `name`、`description`、JSON Schema `parameters` 和 `timeout_ms`。参考实现禁止能力参数 schema 中的 `$ref`/`$dynamicRef`，不访问网络或文件解析外部引用。该约束是首个绑定的安全边界，不表示所有未来绑定都不能采用安全的本地引用。
 
@@ -127,3 +127,9 @@ Agent 身份可跨游戏延续，但本协议不创建全局账号中心，不�
 - 413 `message_too_large`、415 类型/编码不支持、429 `resource_limit`：资源或绑定限制。
 
 调用者只在安全条件下重发原 ID、原内容；SDK 不自动重试有副作用请求。当前还没有 Retry-After、长期结果保留期和多绑定恢复承诺。
+
+## 10. 出站轮询桥接实验绑定
+
+`outbound-poll` 通过已配对的可信桥接转发固定的伙伴操作，不向游戏开放入站端口，也不提供游戏管理员操作。Wire 定义、大小限制、令牌与信任边界见 [出站桥接](OUTBOUND.md)。内层权限、消息 ID、事件页、行动状态和租约仍受本规范约束。
+
+桥接超时 MUST 作为未知结果处理，MUST NOT 自动重做副作用；迟到回包不得触发重复执行。桥接凭据不代替游戏邀请或会话认证。当前本机三进程/TLS 参考不意味着云端身份认证、授权 UI 或生产部署已经完成。

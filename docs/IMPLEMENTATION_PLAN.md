@@ -80,6 +80,20 @@ R14 已有非 Python 对端及最小引擎互通证据，仍需外部实现者�
 
 R10/R11 获得本地参考流程部分证据，仍不关闭：协调器为可信单进程/单线程 UI API，没有跨应用注册认证、网络发现绑定、OS 唤起或云端连接；自动许可仅在进程内保存。实际 Tk 窗口不等于已经集成 MotGUI。R12/R16/R17 继续开放。
 
+## 2026-10-07 出站桥接与三进程检查点
+
+接续 `d3a02a4` 的本地授权检查点，新增 `outbound-poll` 的权威 wire 定义、可信有界邮箱、出站游戏连接器，以及复用会话校验的 Python/JavaScript `BridgeClient`。游戏只主动领取与回包，无需开放监听端口；游戏管理员令牌不交给桥接或伙伴。该传输不是 Mot 专属中心 API，完整协议语义和身份权限仍由游戏宿主检查。
+
+真实三进程演示由桥接/可信启动器、独立 Python 游戏和独立 Node 伙伴组成；游戏进程以审计钩子禁止 `socket.bind`，本次实际 bind 调用为 0。观察、主动队聊、行动请求与游戏结果均经真实 HTTP；重复请求只产生一次游戏执行，冲突 ID、越权行动被拒绝，退出恢复客户端呈现状态。它是确定性游戏规则，不是新增 Godot 渲染或真实跨进程窗口恢复证明。
+
+本机源码完整 Python 套件 68 项通过，无跳过，包含原有 Godot/Tk 与 11 项新增桥接/TLS 用例；Node 13 项通过。新增验证覆盖角色/邮箱隔离、管理员操作拒绝、Unicode 大事件页、容量上限、回包丢失后的未知结果和原 ID 查询、迟到回包拒绝、缺失游戏后的呈现租约恢复、桥接撤销及暂态领取错误恢复。TLS 使用临时生成证书，验证受信链成功、未信任证书和主机名不匹配拒绝；没有关闭证书校验。
+
+构建 wheel 与 npm tarball，安装至 linshi 新环境，移除 PYTHONPATH 并核对导入 site-packages，再次通过 Python 全部 68 项和三进程演示。已核对安装后的 Python 运行时/schema 与源码哈希一致，npm 安装后的 bridge 子路径可导入。第一次安装验证发现源码 PYTHONPATH 下的旧 egg-info 让 pip 误判“已安装”；保留该失败日志，修正验证环境后实际安装 wheel，未删除源码中的历史构建元数据。
+
+本机证据根：`C:/Users/Public/nas_home/AI/GameEditor/linshi/g2a-bridge-20261007/`，包括 `source-tests.log`、`node-tests.log`、`demo.json`、`installed-checks.json`、`r2-installed-tests.log` 与 `installed-source-hashes.json`。独立只读审查工具返回 503，不能称已通过独立审查；本轮由主线程审查并以针对性用例验证。
+
+R12/R13/R14/R15 新增部分证据，仍不整体关闭。桥接可读经过它的会话数据，并非 E2EE；当前只在本机回环和 TLS 上验证，尚无公网/NAT 部署、生产限流/线程池、持久化恢复、跨供应商身份委托或云端授权控制面。R10/R11 的跨应用认证/唤起和真实崩溃窗口恢复，R16/R17 的发布/许可事项仍开放。CI 定义新增 OpenSSL 必需检查和三进程演示，远端实际结果单独记录，不以本机通过代替。
+
 ## 本次参考证据
 
 2026-10-07 已联网读取 A2A 官方 `README.md`、`CONTRIBUTING.md`、`GOVERNANCE.md`、`specification/`、`docs/specification.md` 及发布工作流。GitHub Latest Release 为 v1.0.1；文档中仍有 v1.0.0 提示，因此稳定参考应固定 release，不以 main 文档标签判断版本。

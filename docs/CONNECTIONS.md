@@ -49,3 +49,5 @@ python examples/local_pairing.py
 测试：设置 `G2A_GUI_TEST=1`，执行 `python -m unittest discover -s tests -p 'test_pairing*.py' -v`。GUI 测试调用实际 Tk 按钮回调并检查窗口状态，不是人工鼠标点击测试，也不证明 MotGUI 集成或 OS 应用崩溃恢复。未设置显示测试变量时，窗口用例明确跳过。
 
 跨进程桌面恢复、持久化自动加入偏好、陌生游戏身份认证、应用唤起、云端选择/授权均继续开放。不能用这个可信同进程协调器替代完整 R10-R12 验收。
+
+后续已新增 [出站桥接参考](OUTBOUND.md)，证明游戏无监听端口时的跨进程传输。它要求可信控制面预先配对，不改变本文尚缺跨应用注册认证和云端用户授权的边界，也没有把 `PairingCoordinator` 暴露到网络。

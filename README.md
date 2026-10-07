@@ -9,6 +9,7 @@ Game-to-Agent：游戏与玩家伙伴 Agent 的独立双向交互协议。当前
 - [完整目标与实施台账](docs/IMPLEMENTATION_PLAN.md)
 - [参考 A2A 的对外发布路线](docs/PUBLISHING.md)
 - [本地发现与连接授权草案](docs/CONNECTIONS.md)
+- [无需游戏监听端口的出站桥接](docs/OUTBOUND.md)
 - [贡献规则](CONTRIBUTING.md) 与 [安全边界](SECURITY.md)
 
 已提供权威 JSON Schema、Python 参考宿主/客户端、独立 JavaScript 客户端、跨进程 HTTP 互通、跨游戏来源记忆示例和最小 Godot 游戏适配。仍未冻结消息格式，跨语言测试不代表第三方认证；尚无完整云端接入或生产级引擎 SDK。被 Mot 主仓库引用仅用于集成管理，不影响独立使用和演进。
@@ -40,7 +41,7 @@ JavaScript 互通测试启动独立 Node 伙伴进程，仅交给它伙伴邀请
 
 `examples/memory_companion.py` 示范同一伙伴在两个游戏中使用共同经历、玩家讲述和外部参考的来源边界，并按受众约束记忆披露。这不是协议指定的记忆数据库，也不证明持久化身份或云端同步已完成。JavaScript 包说明见 [SDK 文档](sdk/javascript/README.md)，目前仅支持本地打包，尚未发布 npm。
 
-协议结构的权威源为 `src/g2a/schema.json`，语义见规范。请勿把实现中的内存容量限制、尚未开发的发现/云端入口，误认作完整协议目标已经完成。
+协议结构的权威源为 `src/g2a/schema.json`，语义见规范。请勿把实现中的内存容量限制、参考桥接或尚未开发的跨应用发现/云端授权，误认作完整协议目标已经完成。
 
 ## 真实 Godot 游戏示例
 
@@ -59,3 +60,9 @@ python examples/godot_demo.py --godot /path/to/godot --output /path/to/new-outpu
 安装 Python 包后运行 `python examples/local_pairing.py`（需要 Tk 和可用桌面）。可以先启动桌面伙伴并询问加入，也可在游戏侧点击“链接我的伙伴”，批准后启动本地伙伴窗口。精确范围下的自动加入可明确勾选和撤销；退出时恢复实际窗口加入前的显示/隐藏状态。
 
 它使用可信同进程注册的回环宿主，不是网络广播发现、OS 应用唤起或云端授权。自动加入设置只在本次进程运行中有效；不依赖 Mot 账号。验证窗口回调需设置 `G2A_GUI_TEST=1` 后运行完整测试，否则窗口用例明确跳过。详细信任边界见连接草案。
+
+## 游戏主动出站连接
+
+运行 `python examples/outbound_demo.py`，由桥接、独立 Python 游戏和 Node 伙伴完成真实三进程交互。游戏进程禁止 `socket.bind`，无需监听入站端口；外层游戏/伙伴令牌与内层邀请/会话凭据分离。Python 与 JavaScript 都提供 `BridgeClient`，复用已有协议语义。详见 [出站桥接说明](docs/OUTBOUND.md)。
+
+这提供云端部署所需的出站传输参考，不是已部署的云端产品。桥接是能读取会话数据的可信终点；生产 TLS、身份委托、授权控制面、并发限制与持久化仍需实现。现有 TLS 用例验证本地 TLS 信任与主机名，不证明公网/NAT 场景。

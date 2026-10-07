@@ -18,3 +18,13 @@ await client.leave();
 邀请由游戏方在确认用户授权后提供，不把凭据写入日志或 URL。`checkLease()` 需由集成层周期调用，`desktopVisible` 只是呈现状态，不控制真实窗口。当前不实现发现、唤起、浏览器 CORS 或完整云端接入。
 
 开发：`npm ci`、`npm test`。包验证：`npm pack`。规范、发布边界及安全限制见主仓库文档；客户端没有自动重试有副作用操作。
+
+出站桥接由 `g2a-reference-client/bridge` 导出 `BridgeClient`：
+
+```javascript
+import {BridgeClient} from 'g2a-reference-client/bridge';
+const client = new BridgeClient(endpoint, {expectedGameId: 'key-quest', bridgeToken});
+await client.join(invitation, joinRequest);
+```
+
+后续 poll/send/leave 与原客户端一致。外层 `bridgeToken` 不代替内层邀请或会话凭据；桥接是可信的明文终点，能读取经它转发的数据。超时不自动重做动作。HTTPS 使用 Node 的正常证书信任链，不禁用主机名校验。完整信任及云端未完成项见 `docs/OUTBOUND.md`。

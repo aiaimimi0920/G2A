@@ -27,7 +27,7 @@ def strict_json(raw):
     return value
 
 
-def handler_for(host):
+def handler_for(host, *, dispatch_override=None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"
 
@@ -52,6 +52,9 @@ def handler_for(host):
                 url = urlsplit(self.path)
                 if url.scheme or url.netloc or url.fragment:
                     raise ProtocolError("invalid_route", "Relative request target required")
+                if dispatch_override is not None:
+                    self.reply(200, dispatch_override(self, method))
+                    return
                 parts = url.path.strip("/").split("/")
                 token = self.headers.get("Authorization", "")
                 token = token[7:] if token.startswith("Bearer ") else ""
@@ -96,7 +99,7 @@ def handler_for(host):
             except (TimeoutError, ConnectionError, BrokenPipeError):
                 self.close_connection = True
 
-        def body(self):
+        def body(self, *, max_bytes=MAX_BODY):
             if self.headers.get("Transfer-Encoding") or self.headers.get("Content-Encoding"):
                 raise ProtocolError("unsupported_encoding", "Encoded or chunked request bodies are not supported", 415)
             if self.headers.get_content_type() != "application/json":
@@ -105,7 +108,7 @@ def handler_for(host):
             if len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdecimal():
                 raise ProtocolError("invalid_length", "One Content-Length is required", 411)
             size = int(lengths[0])
-            if size > MAX_BODY:
+            if size > max_bytes:
                 raise ProtocolError("message_too_large", "Request exceeds binding size limit", 413)
             raw = self.rfile.read(size)
             if len(raw) != size:

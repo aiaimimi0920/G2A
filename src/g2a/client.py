@@ -4,7 +4,7 @@ import json
 import time
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 import uuid
 
 from .validation import ProtocolError, validate
@@ -16,7 +16,7 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 class Client:
-    def __init__(self, endpoint, *, expected_game_id, clock=time.monotonic):
+    def __init__(self, endpoint, *, expected_game_id, clock=time.monotonic, ssl_context=None):
         url = urlsplit(endpoint)
         if url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password or url.query or url.fragment or url.path not in {"", "/"}:
             raise ValueError("An explicit HTTP(S) origin without credentials is required")
@@ -24,7 +24,7 @@ class Client:
             raise ValueError("Plain HTTP is restricted to explicit IPv4 loopback")
         self.endpoint = endpoint.rstrip("/")
         self.expected_game_id = expected_game_id
-        self.opener = build_opener(ProxyHandler({}), NoRedirect())
+        self.opener = build_opener(ProxyHandler({}), NoRedirect(), HTTPSHandler(context=ssl_context))
         self.clock = clock
         self.session = None
         self.token = None
@@ -37,7 +37,7 @@ class Client:
         headers = {"Content-Type": "application/json"}
         if token:
             headers["Authorization"] = "Bearer " + token
-        data = None if body is None else json.dumps(body, allow_nan=False).encode()
+        data = None if body is None else json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8")
         req = Request(self.endpoint + path, data=data, headers=headers)
         try:
             with self.opener.open(req, timeout=5) as response:
