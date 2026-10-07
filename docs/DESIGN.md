@@ -1,6 +1,6 @@
 # G2A：Game-to-Agent
 
-G2A 是面向游戏与玩家伙伴的独立双向交互协议构思。本目录当前记录设计边界，不是已发布的正式规范，没有 SDK、消息 schema 或可运行实现。
+G2A 是面向游戏与玩家伙伴的独立双向交互协议构思。本文保留已确认的产品设计方向；当前实验规范与参考实现见 [SPECIFICATION.md](SPECIFICATION.md)，完整未完成项见 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)。有实验实现不等于已发布正式规范。
 
 ## 已明确的方向
 
