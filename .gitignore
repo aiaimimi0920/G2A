@@ -1,0 +1,47 @@
+# Godot 4+ specific ignores
+.godot/
+
+# Godot-specific ignores
+.import/
+export.cfg
+*.tmp
+
+# Imported translations (automatically generated from CSV files)
+*.translation
+
+# Mono-specific ignores
+.mono/
+data_*/
+mono_crash.*.json
+
+# Builds/export folder
+![Bb]uild/.gdignore
+[Bb]uild/
+
+# Sandbox folder (for testing in local machine)
+[Ss]andbox/
+
+# macOS-specific ignores
+.DS_Store
+
+# VSCode-specific ignores
+.vscode/
+
+# Python-specific ignores
+*.pyc
+*.log
+*.exe
+
+# 主程序与插件源码已合并；这些目录必须纳入新仓库。
+
+# 本地缓存、编译产物与私有配置
+.history/
+__pycache__/
+.venv/
+*.lib
+*.exp
+.env
+.env.*
+!.env.example
+
+!*.dll
