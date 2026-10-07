@@ -1,0 +1,788 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/aiaimimi0920/G2A/schema/0.1.0-dev",
+  "title": "G2A experimental wire input definitions",
+  "$defs": {
+    "policy": {
+      "type": "object",
+      "properties": {
+        "spoilers": {
+          "enum": [
+            "avoid_unknown",
+            "allow"
+          ]
+        },
+        "advice": {
+          "enum": [
+            "hints",
+            "direct"
+          ]
+        },
+        "proactive_chat": {
+          "type": "boolean"
+        },
+        "proactive_actions": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "avatar": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "format": {
+          "enum": [
+            "text",
+            "image",
+            "model"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        }
+      },
+      "required": [
+        "id",
+        "format",
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "parameters",
+        "timeout_ms"
+      ],
+      "additionalProperties": false
+    },
+    "descriptor": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "0.1.0-dev"
+        },
+        "game_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "bindings": {
+          "const": [
+            "http-poll"
+          ]
+        },
+        "avatar_formats": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "text",
+              "image",
+              "model"
+            ]
+          },
+          "maxItems": 3
+        },
+        "presentation": {
+          "enum": [
+            "hide_desktop",
+            "coexist",
+            "user_choice"
+          ]
+        },
+        "game_avatar": {
+          "$ref": "#/$defs/avatar"
+        },
+        "policy": {
+          "$ref": "#/$defs/policy"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action"
+          },
+          "maxItems": 128
+        }
+      },
+      "required": [
+        "protocol",
+        "game_id",
+        "name",
+        "bindings",
+        "avatar_formats",
+        "presentation",
+        "policy",
+        "actions"
+      ],
+      "additionalProperties": false
+    },
+    "join": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "0.1.0-dev"
+        },
+        "agent_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "player_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "default_avatar": {
+          "$ref": "#/$defs/avatar"
+        },
+        "forced_avatar": {
+          "$ref": "#/$defs/avatar"
+        },
+        "desktop_visible": {
+          "type": "boolean"
+        },
+        "preferred_presentation": {
+          "enum": [
+            "hide_desktop",
+            "coexist"
+          ]
+        },
+        "user_policy": {
+          "$ref": "#/$defs/policy"
+        },
+        "allowed_actions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          },
+          "maxItems": 128
+        }
+      },
+      "required": [
+        "protocol",
+        "agent_id",
+        "player_id",
+        "default_avatar",
+        "desktop_visible",
+        "user_policy",
+        "allowed_actions"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "shared_experience",
+            "player_report",
+            "external_reference"
+          ]
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "player_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "kind",
+        "source_id",
+        "player_id"
+      ],
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "facts": {
+          "type": "object",
+          "maxProperties": 128
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      },
+      "required": [
+        "summary",
+        "facts",
+        "provenance"
+      ],
+      "additionalProperties": false
+    },
+    "chat": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "channel": {
+          "enum": [
+            "private",
+            "team"
+          ]
+        },
+        "recipients": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      },
+      "required": [
+        "text",
+        "channel",
+        "recipients"
+      ],
+      "additionalProperties": false
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "arguments": {
+          "type": "object",
+          "maxProperties": 128
+        },
+        "capability_revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "action",
+        "arguments",
+        "capability_revision"
+      ],
+      "additionalProperties": false
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "cancelled",
+            "unknown"
+          ]
+        },
+        "details": {
+          "type": "object",
+          "maxProperties": 128
+        }
+      },
+      "required": [
+        "request_id",
+        "status",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action"
+          },
+          "maxItems": 128
+        }
+      },
+      "required": [
+        "actions"
+      ],
+      "additionalProperties": false
+    },
+    "cancel": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "request_id"
+      ],
+      "additionalProperties": false
+    },
+    "leave": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "message": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "type": {
+              "const": "game.context"
+            },
+            "sender": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "data": {
+              "$ref": "#/$defs/context"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "sender",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "type": {
+              "const": "chat.message"
+            },
+            "sender": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "data": {
+              "$ref": "#/$defs/chat"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "sender",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "type": {
+              "const": "action.request"
+            },
+            "sender": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "data": {
+              "$ref": "#/$defs/request"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "sender",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "type": {
+              "const": "action.result"
+            },
+            "sender": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "data": {
+              "$ref": "#/$defs/result"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "sender",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "type": {
+              "const": "capability.update"
+            },
+            "sender": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "data": {
+              "$ref": "#/$defs/capabilities"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "sender",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "type": {
+              "const": "action.cancel"
+            },
+            "sender": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "data": {
+              "$ref": "#/$defs/cancel"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "sender",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "session": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "state": {
+          "enum": [
+            "active",
+            "closed"
+          ]
+        },
+        "game_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "agent_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "player_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "avatar": {
+          "$ref": "#/$defs/avatar"
+        },
+        "policy": {
+          "$ref": "#/$defs/policy"
+        },
+        "desktop_visible": {
+          "type": "boolean"
+        },
+        "restore_desktop_visible": {
+          "type": "boolean"
+        },
+        "capability_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "allowed_actions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          }
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "state",
+        "game_id",
+        "agent_id",
+        "player_id",
+        "avatar",
+        "policy",
+        "desktop_visible",
+        "restore_desktop_visible",
+        "capability_revision",
+        "allowed_actions",
+        "sequence"
+      ],
+      "additionalProperties": false
+    },
+    "joined": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "$ref": "#/$defs/session"
+        },
+        "session_token": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 128
+        },
+        "lease_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 300
+        }
+      },
+      "required": [
+        "session",
+        "session_token",
+        "lease_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "receipt": {
+      "type": "object",
+      "properties": {
+        "accepted": {
+          "const": true
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "accepted",
+        "sequence"
+      ],
+      "additionalProperties": false
+    },
+    "event_message": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/message"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "type": {
+              "const": "session.closed"
+            },
+            "sender": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                },
+                "restore_desktop_visible": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "reason",
+                "restore_desktop_visible"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "sender",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "type": {
+              "const": "action.expired"
+            },
+            "sender": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "request_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+                },
+                "status": {
+                  "const": "unknown"
+                }
+              },
+              "required": [
+                "request_id",
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "sender",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "poll": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "$ref": "#/$defs/session"
+        },
+        "events": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "sequence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "message": {
+                "$ref": "#/$defs/event_message"
+              }
+            },
+            "required": [
+              "sequence",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "cursor": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "session",
+        "events",
+        "cursor"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/descriptor"
+    },
+    {
+      "$ref": "#/$defs/join"
+    },
+    {
+      "$ref": "#/$defs/message"
+    }
+  ]
+}

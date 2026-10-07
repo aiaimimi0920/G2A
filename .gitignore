@@ -47,3 +47,7 @@ dist/
 !.env.example
 
 !*.dll
+
+# JavaScript SDK dependencies and distribution archives
+node_modules/
+*.tgz

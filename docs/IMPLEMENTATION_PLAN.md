@@ -46,6 +46,18 @@
 
 各阶段均可以暴露暂未实现的项，不宣称完整符合。保持现有 LGPL 许可，不擅自替用户改为 Apache 或其他许可；参考 A2A 思路不复制其实现。
 
+## 2026-10-07 跨语言与来源记忆检查点
+
+新增独立 Node.js 客户端，以 Ajv 验证从权威 schema 生成的副本。Python 游戏宿主与独立 Node 伙伴进程通过真实 HTTP 互通；伙伴不持有游戏管理员令牌，验证主动队聊、请求执行、重复请求只执行一次、冲突请求与越权拒绝和退出呈现恢复。
+
+新增可替换内存记忆示例：先在游戏 A 经历事件，再以同一伙伴身份进入游戏 B 并保留来源回答。玩家讲述与共同经历均可作为已知背景；外部参考默认不作为共同记忆使用，显式使用时保留外部来源；私人记忆受受众约束。二周目保留知识目前仅有记忆适配器级用例，不代表完整游戏存档流程。
+
+本机 Python 33 项测试全部通过，无跳过；Node 11 项测试全部通过。JavaScript schema/LICENSE 字节同步检查通过；`npm pack` 后安装到 linshi 独立 consumer，并以安装后的客户端重跑 Python 33 项全部通过。安装时 npm audit 报告 0 个已知漏洞，不代表安全认证。CI 已加入 Node 22、依赖安装、schema 检查、JS 测试和打包；远端结果另行核实，不用本机结果代替。
+
+R07、R14、R15 获得新增部分证据，仍不整体关闭：身份尚未持久化或跨供应商认证，记忆示例没有数据库/同步，缺少 Godot 适配和第三方互操作。完整云端、本地发现、真实窗口恢复、网站部署、正式许可与稳定发布仍开放。JavaScript 包保持 private，未向 npm 发布。
+
+安装包与测试依赖目录：`C:/Users/Public/nas_home/AI/GameEditor/linshi/g2a-js-20261007/`。公开发布计划见 `PUBLISHING.md`。
+
 ## 本次参考证据
 
 2026-10-07 已联网读取 A2A 官方 `README.md`、`CONTRIBUTING.md`、`GOVERNANCE.md`、`specification/`、`docs/specification.md` 及发布工作流。GitHub Latest Release 为 v1.0.1；文档中仍有 v1.0.0 提示，因此稳定参考应固定 release，不以 main 文档标签判断版本。
