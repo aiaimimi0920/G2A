@@ -70,6 +70,16 @@ R14 已有非 Python 对端及最小引擎互通证据，仍需外部实现者�
 
 本机证据根目录：`C:/Users/Public/nas_home/AI/GameEditor/linshi/g2a-godot-20261007/`；官方窗口结果位于 `official-window-02/`，包含 `game.png`、`game.json`、`result.json` 和日志。
 
+## 2026-10-07 本地授权与实际窗口检查点
+
+新增 `g2a.pairing.PairingCoordinator` 与 `examples/local_pairing.py`。可信本地注册后可从桌面或游戏侧发起请求；用户允许前不发邀请，拒绝不加入；精确范围自动加入可撤销，未运行伙伴不会因自动加入许可而静默启动。邀请固定批准时的游戏描述和能力版本，首次 join 前变化需重新批准，已绑定邀请仍保持同请求重试幂等。
+
+实际 Tk 示例连接真实回环 HTTP 宿主，按照游戏呈现条件隐藏伙伴窗口，退出或租约到期恢复连接时的原始状态。新增授权与窗口测试覆盖游戏端关闭、模拟网络失败后的过期租约、询问期间窗口状态变化、等待批准时伙伴新启动/关闭及游戏名称变化。只读审查指出的旧 launch_required 强制显示窗口和名称展示不一致已修复；补充检查消除了手动触发轮询后遗留的 Tk after 回调。全套测试曾暴露 Tk 变量延后被 HTTP 线程 GC 回收导致主线程错误及后续请求超时，改为 UI 线程明确释放并在窗口测试清理阶段收集后，重新通过完整套件。
+
+完整安装包验证：构建 wheel 到 `C:/Users/Public/nas_home/AI/GameEditor/linshi/g2a-pairing-20261007/dist/`，安装至隔离环境，移除 PYTHONPATH 并核对实际导入 site-packages，再运行全套 57 项测试，包含真实 Godot 与 Tk 用例，无跳过。Tk 用例通过调用实际控件回调检查窗口状态，不是人工点击、视觉截图或系统级应用唤起的证明。网络失败用例为故障注入，不能冒充实际杀进程恢复测试。
+
+R10/R11 获得本地参考流程部分证据，仍不关闭：协调器为可信单进程/单线程 UI API，没有跨应用注册认证、网络发现绑定、OS 唤起或云端连接；自动许可仅在进程内保存。实际 Tk 窗口不等于已经集成 MotGUI。R12/R16/R17 继续开放。
+
 ## 本次参考证据
 
 2026-10-07 已联网读取 A2A 官方 `README.md`、`CONTRIBUTING.md`、`GOVERNANCE.md`、`specification/`、`docs/specification.md` 及发布工作流。GitHub Latest Release 为 v1.0.1；文档中仍有 v1.0.0 提示，因此稳定参考应固定 release，不以 main 文档标签判断版本。

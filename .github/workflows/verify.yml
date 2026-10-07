@@ -58,6 +58,11 @@ jobs:
           "GODOT_EXECUTABLE=$executable" >> $env:GITHUB_ENV
           "G2A_TEST_OUTPUT=$(Join-Path $env:RUNNER_TEMP 'g2a-results')" >> $env:GITHUB_ENV
       - run: python -m unittest discover -s tests -v
+      - name: Verify real Tk window callbacks on Windows
+        if: runner.os == 'Windows'
+        env:
+          G2A_GUI_TEST: '1'
+        run: python -m unittest discover -s tests -p test_pairing_gui.py -v
       - run: python examples/key_quest.py
       - run: python -m pip wheel . --no-deps --wheel-dir dist
       - uses: actions/upload-artifact@v4

@@ -73,9 +73,16 @@ class GameHost:
         self.invitations = {}
         self.lock = threading.RLock()
 
-    def invite(self, agent_id, player_id, *, team=(), allowed_actions=(), ttl=120):
+    def authorization_state(self):
+        """供可信授权 UI 固定玩家看到的游戏条件，不包含任何令牌。"""
+        with self.lock:
+            return fingerprint(dict(descriptor=self.descriptor, revision=self.revision))
+
+    def invite(self, agent_id, player_id, *, team=(), allowed_actions=(), ttl=120, expected_state=None):
         """由宿主在用户确认或既有自动加入授权之后调用，不能由 Agent 自授。"""
         with self.lock:
+            if expected_state is not None and expected_state != self.authorization_state():
+                raise ProtocolError("approval_stale", "Game conditions changed after approval", 409)
             if len(self.invitations) >= 256:
                 raise ProtocolError("resource_limit", "Invitation capacity reached", 429)
             if len({agent_id, player_id, self.descriptor["game_id"]}) != 3:
@@ -85,7 +92,7 @@ class GameHost:
             token = secrets.token_urlsafe(32)
             self.invitations[token] = dict(agent=agent_id, player=player_id, team=set(team) | {player_id},
                                            permissions=set(allowed_actions), expires=self.clock() + ttl,
-                                           session=None, fingerprint=None)
+                                           session=None, fingerprint=None, expected_state=expected_state)
             return token
 
     def join(self, token, request):
@@ -107,6 +114,8 @@ class GameHost:
                 if s.state != "active":
                     raise ProtocolError("session_closed", "Invitation session has ended", 409)
                 return self._joined(s)
+            if invitation.get("expected_state") is not None and invitation["expected_state"] != self.authorization_state():
+                raise ProtocolError("approval_stale", "Game conditions changed after approval", 409)
             if len(self.sessions) >= 64:
                 raise ProtocolError("resource_limit", "Session capacity reached", 429)
             for previous in self.sessions.values():

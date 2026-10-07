@@ -8,6 +8,7 @@ Game-to-Agent：游戏与玩家伙伴 Agent 的独立双向交互协议。当前
 - [实验性规范](docs/SPECIFICATION.md)
 - [完整目标与实施台账](docs/IMPLEMENTATION_PLAN.md)
 - [参考 A2A 的对外发布路线](docs/PUBLISHING.md)
+- [本地发现与连接授权草案](docs/CONNECTIONS.md)
 - [贡献规则](CONTRIBUTING.md) 与 [安全边界](SECURITY.md)
 
 已提供权威 JSON Schema、Python 参考宿主/客户端、独立 JavaScript 客户端、跨进程 HTTP 互通、跨游戏来源记忆示例和最小 Godot 游戏适配。仍未冻结消息格式，跨语言测试不代表第三方认证；尚无完整云端接入或生产级引擎 SDK。被 Mot 主仓库引用仅用于集成管理，不影响独立使用和演进。
@@ -49,6 +50,12 @@ JavaScript 互通测试启动独立 Node 伙伴进程，仅交给它伙伴邀请
 python examples/godot_demo.py --godot /path/to/godot --output /path/to/new-output --window
 ```
 
-完整引擎测试另需设置 `GODOT_EXECUTABLE` 和 `G2A_TEST_OUTPUT`。缺少这些配置时引擎测试明确跳过。CI 固定下载并校验官方 Godot 4.5.1，验证成功拾取、世界拒绝、领取前取消和移动中退出。跨进程真实窗口恢复、任意形象导入、游戏内授权入口仍未完成。
+完整引擎测试另需设置 `GODOT_EXECUTABLE` 和 `G2A_TEST_OUTPUT`。缺少这些配置时引擎测试明确跳过。CI 固定下载并校验官方 Godot 4.5.1，验证成功拾取、世界拒绝、领取前取消和移动中退出。跨进程真实窗口恢复、任意形象导入、跨应用游戏内授权入口仍未完成。
 
 本轮保留原仓库已有许可文件，没有另行决定或宣称新的协议规范许可；正式发布前需单独确定。
+
+## 本地加入与真实窗口示例
+
+安装 Python 包后运行 `python examples/local_pairing.py`（需要 Tk 和可用桌面）。可以先启动桌面伙伴并询问加入，也可在游戏侧点击“链接我的伙伴”，批准后启动本地伙伴窗口。精确范围下的自动加入可明确勾选和撤销；退出时恢复实际窗口加入前的显示/隐藏状态。
+
+它使用可信同进程注册的回环宿主，不是网络广播发现、OS 应用唤起或云端授权。自动加入设置只在本次进程运行中有效；不依赖 Mot 账号。验证窗口回调需设置 `G2A_GUI_TEST=1` 后运行完整测试，否则窗口用例明确跳过。详细信任边界见连接草案。
