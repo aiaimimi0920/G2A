@@ -5,6 +5,8 @@ Game-to-Agent：游戏与玩家伙伴 Agent 的独立双向交互协议。当前
 仓库：https://github.com/aiaimimi0920/G2A 。任何游戏和 Agent 均可实现，不依赖 Mot 账号、服务器、模型、记忆服务或主仓库。聚焦伙伴身份，不扩展为游戏所有 NPC 的通用智能化系统。
 
 - [已确认方向与待讨论边界](docs/DESIGN.md)
+- [协议设计完整性梳理与决策队列](docs/DESIGN_COMPLETENESS.md)
+- [下一版协议总设计与全流程伪代码](docs/protocol/README.md)
 - [实验性规范](docs/SPECIFICATION.md)
 - [完整目标与实施台账](docs/IMPLEMENTATION_PLAN.md)
 - [参考 A2A 的对外发布路线](docs/PUBLISHING.md)
@@ -14,6 +16,12 @@ Game-to-Agent：游戏与玩家伙伴 Agent 的独立双向交互协议。当前
 - [贡献规则](CONTRIBUTING.md) 与 [安全边界](SECURITY.md)
 
 已提供权威 JSON Schema、Python 参考宿主/客户端、独立 JavaScript 客户端、跨进程 HTTP 互通、跨游戏来源记忆示例和最小 Godot 游戏适配。仍未冻结消息格式，跨语言测试不代表第三方认证；尚无完整云端接入或生产级引擎 SDK。被 Mot 主仓库引用仅用于集成管理，不影响独立使用和演进。
+
+当前工作重点（2026-10-07）：先完成协议研究与设计完整性，不以扩展具体应用、示例或 SDK 为主要目标。需要验证设计假设时采用必要的本地测试；GitHub Actions 暂不作为当前研究工作的前置门槛，工作流配置仍保留。设计缺口与建议以完整性梳理文档为入口，不改变现有 `0.1.0-dev` 契约。
+
+本阶段协议工作草案、字段/操作契约、伪代码与假实现验证包已完成交付，详见
+[最终审计](docs/protocol/FINAL_AUDIT.md)。统一设计验证入口为 `python scripts/verify_design.py`；
+此完成状态不代表旧 SDK 已升级、生产适配器已验收或已发布稳定协议。
 
 ## 本地验证
 

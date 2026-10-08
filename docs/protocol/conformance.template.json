@@ -1,0 +1,255 @@
+{
+  "statement_version": "g2a-conformance-statement-1",
+  "subject": {
+    "name": "replace-with-subject",
+    "revision": "replace-with-exact-revision",
+    "artifact_kind": "design"
+  },
+  "status": "not_evaluated",
+  "assurance": "design",
+  "design_revision": "g2a-design-1",
+  "wire_versions": [],
+  "roles": [],
+  "features": [
+    "core.session",
+    "core.events"
+  ],
+  "trust_profiles": [],
+  "bindings": [],
+  "ledger_durability": "volatile",
+  "evidence": [],
+  "coverage": [
+    {
+      "operation": "describe",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "offer.create",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "offer.get",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "offer.decide",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "invitation.redeem",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "session.join",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "session.heartbeat",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "session.snapshot",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "session.events",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "session.close",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "session.resume",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "session.handoff",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "session.claim_control",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "operation.get",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "chat.send",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "action.request",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "action.cancel",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "action.query",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "action.confirm",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "context.publish",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "player_chat.forward",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "capability.replace",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "membership.replace",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "permission.revoke",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "action.claim",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "action.commit_result",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "launch.request",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "asset.resolve",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "presentation.acquire",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "presentation.renew",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "presentation.release",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "privacy.request",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "privacy.receipt",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "relay.register",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "relay.call",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "relay.pull",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "relay.reply",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    },
+    {
+      "operation": "relay.revoke",
+      "verdict": "not_evaluated",
+      "evidence_ids": [],
+      "limitations": []
+    }
+  ],
+  "exclusions": [
+    "Not a certification; replace placeholders and independently review evidence."
+  ],
+  "reviewed_by": "not-reviewed"
+}
