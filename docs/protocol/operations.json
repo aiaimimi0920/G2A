@@ -24,7 +24,7 @@
       "mode": "control",
       "input": "offer_create_input",
       "output": "offer_create_output",
-      "semantic_guard": "companion 入口 actor=agent；game 入口为玩家或经验证委托；固定 Scope 后不能替换身份。"
+      "semantic_guard": "companion 入口 actor=agent；game 入口为玩家或经验证委托；固定 Scope 后不能替换身份；当前规则精确匹配且无需启动时可同事务批准。"
     },
     "offer.get": {
       "roles": [
@@ -47,7 +47,7 @@
       "mode": "control",
       "input": "offer_decide_input",
       "output": "offer_decide_output",
-      "semantic_guard": "decision_ref 验证真实玩家交互；remember=true 必须同时提供规则期限与授权时长，false 禁止两字段；拒绝时两许可均为 false。"
+      "semantic_guard": "decision_ref 验证真实玩家交互；remember=true 必须提供独立规则期限与授权时长，返回 auto_rule 原批准引用；false 禁止两字段；拒绝时两许可均为 false。"
     },
     "invitation.redeem": {
       "roles": [
@@ -274,7 +274,7 @@
       "mode": "control",
       "input": "permission_revoke_input",
       "output": "permission_revoke_output",
-      "semantic_guard": "按对象验证撤销权；game 只走管理入口；result_read 单独撤销不伪造不存在。"
+      "semantic_guard": "按对象验证撤销权；relay 对象先分派到 Relay owner 并按 relay.revoke 的角色/lane 授权，不采用本项游戏入口角色；auto_rule 仅所属玩家可撤且不级联已有 Grant；game 只走管理入口；result_read 单独撤销不伪造不存在。"
     },
     "action.claim": {
       "roles": [

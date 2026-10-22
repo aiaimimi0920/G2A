@@ -15,7 +15,7 @@
 - 角色：`agent / player`；入口：`control`；能力：`core.session`；重试族：`control`。
 - 输入：`offer_create_input`；必需字段：`entry / descriptor_id / expected_descriptor_revision / requested`；可选字段：`无`。
 - 成功输出：`offer_create_output`。
-- 语义条件：companion 入口 actor=agent；game 入口为玩家或经验证委托；固定 Scope 后不能替换身份。
+- 语义条件：companion 入口 actor=agent；game 入口为玩家或经验证委托；固定 Scope 后不能替换身份；当前规则精确匹配且无需启动时可同事务批准。
 
 ## offer.get
 
@@ -29,7 +29,7 @@
 - 角色：`player`；入口：`control`；能力：`core.session`；重试族：`control`。
 - 输入：`offer_decide_input`；必需字段：`offer_id / scope_digest / allow / remember / launch_permission / decision_ref`；可选字段：`rule_expires_at / maximum_grant_duration_ms`。
 - 成功输出：`offer_decide_output`。
-- 语义条件：decision_ref 验证真实玩家交互；remember=true 必须同时提供规则期限与授权时长，false 禁止两字段；拒绝时两许可均为 false。
+- 语义条件：decision_ref 验证真实玩家交互；remember=true 必须提供独立规则期限与授权时长，返回 auto_rule 原批准引用；false 禁止两字段；拒绝时两许可均为 false。
 
 ## invitation.redeem
 
@@ -169,7 +169,7 @@
 - 角色：`player / game`；入口：`control`；能力：`core.session`；重试族：`control`。
 - 输入：`permission_revoke_input`；必需字段：`object_type / object_id / expected_revision`；可选字段：`无`。
 - 成功输出：`permission_revoke_output`。
-- 语义条件：按对象验证撤销权；game 只走管理入口；result_read 单独撤销不伪造不存在。
+- 语义条件：按对象验证撤销权；relay 对象先分派到 Relay owner 并按 relay.revoke 的角色/lane 授权，不采用本项游戏入口角色；auto_rule 仅所属玩家可撤且不级联已有 Grant；game 只走管理入口；result_read 单独撤销不伪造不存在。
 
 ## action.claim
 

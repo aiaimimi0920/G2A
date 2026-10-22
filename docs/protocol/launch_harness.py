@@ -39,16 +39,20 @@ class LaunchHarness(A.AssetHarness):
         return record
 
     def _decision_options(self, record, payload, evidence, now):
-        R.require(not payload["remember"], "feature_unsupported")
-        if payload["launch_permission"]:
+        if payload["launch_permission"] or payload["remember"]:
             binding = record["launch_binding"]
             R.require(C.codec.canonical(binding) == C.codec.canonical(self.launcher.binding()), "approval_stale")
             R.require(C.codec.canonical(evidence.get("launch_binding")) == C.codec.canonical(binding), "consent_required")
+        if payload["launch_permission"]:
             ref, view = payload["decision_ref"], record["view"]
             R.require(ref not in self.state["launch_permits"], "id_conflict")
             self.state["launch_permits"][ref] = {"offer_id": view["offer_id"], "player": deepcopy(view["immutable_scope"]["player"]),
                 "scope_digest": view["scope_digest"], "binding": deepcopy(binding), "expires_at": view["decision_deadline"],
                 "request_id": None}
+
+    def _automatic_context(self, record):
+        # 接入许可不能跨本地应用/注册 revision/设备复用；运行状态不属于永久授权条件。
+        return deepcopy(record["launch_binding"])
 
     def _available_for_offer(self, record):
         return self.launcher.available(record["launch_binding"])

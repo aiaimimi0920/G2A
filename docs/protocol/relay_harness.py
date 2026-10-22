@@ -134,7 +134,10 @@ class RelayHarness:
             reply["error"] = E.boundary_error(code, knowledge=knowledge)
         C.validate_reply(request["operation"], request["request_id"], reply)
         encoded = C.codec.canonical(reply)
-        box = self.state["mailboxes"].get(request["payload"].get("mailbox_id"))
+        mailbox_id = request["payload"].get("mailbox_id")
+        if request["operation"] == "permission.revoke" and request["payload"]["object_type"] == "relay":
+            mailbox_id = request["payload"]["object_id"]
+        box = self.state["mailboxes"].get(mailbox_id)
         limits = self.fixture["scope"]["limits"] if box is None else box["registration"]["limits"]
         R.require(len(encoded) <= min(65536, limits["message_bytes"]), "resource_limit")
         return encoded
@@ -147,7 +150,7 @@ class RelayHarness:
         return key, prior
 
     def _save_control(self, box, key, request, result):
-        limit = 513 if request["operation"] == "relay.revoke" else 512 if request["operation"] == "relay.reply" else 256
+        limit = 513 if request["operation"] in {"relay.revoke", "permission.revoke"} else 512 if request["operation"] == "relay.reply" else 256
         R.require(len(box["controls"]) < limit, "resource_limit")
         box["controls"][key] = {"digest": self._digest(request), "result": deepcopy(result)}
         return self._reply(request, result)
@@ -305,26 +308,35 @@ class RelayHarness:
         key, prior = self._control(box, request, identity)
         if prior is not None:
             return self._reply(request, prior["result"])
-        R.require(request["payload"]["expected_route_revision"] == box["route_revision"], "approval_stale")
+        generic = request["operation"] == "permission.revoke"
+        revision_field = "expected_revision" if generic else "expected_route_revision"
+        R.require(request["payload"][revision_field] == box["route_revision"], "approval_stale")
+        def result():
+            if generic:
+                return {"object_type": "relay", "object_id": box["mailbox_id"],
+                        "revision": box["route_revision"], "state": "closed"}
+            return {"mailbox_id": box["mailbox_id"], "route_revision": box["route_revision"], "state": "closed"}
         if box["state"] == "closed":
             # 已关闭对象的新 ID 只读固定终态；不能无限消耗专为止损保留的一格。
-            return self._reply(request, {"mailbox_id": box["mailbox_id"], "route_revision": box["route_revision"], "state": "closed"})
+            return self._reply(request, result())
         self._close(box)
-        return self._save_control(box, key, request,
-            {"mailbox_id": box["mailbox_id"], "route_revision": box["route_revision"], "state": "closed"})
+        return self._save_control(box, key, request, result())
 
     def submit(self, raw, credential, *, now, fault=None):
         request = C.validate_request(raw)
         R.require(not self.state["retired"], "temporarily_unavailable")
-        if request["operation"] not in self.RELAY:
+        relay_revocation = request["operation"] == "permission.revoke" and request["payload"]["object_type"] == "relay"
+        if request["operation"] not in self.RELAY and not relay_revocation:
             return self.game.submit(raw, credential, now=now, fault=fault)
         with self.lock:
             self._maintain(now)
             R.require(self.state["ledger_healthy"], "temporarily_unavailable")
-            identity = self._identity(credential, request["operation"], now)
+            # 通用对象撤销在 owner 边界映射到同一 Relay 控制权限，不接受内层 player/game 身份。
+            identity = self._identity(credential, "relay.revoke" if relay_revocation else request["operation"], now)
             R.require(request["version"] == self.fixture["scope"]["version"], "unsupported_version")
             C.validate_active_request(raw, selected_extensions={}, supported_extensions=())
-            box = None if request["operation"] == "relay.register" else self._box(request["payload"]["mailbox_id"], identity)
+            object_field = "object_id" if relay_revocation else "mailbox_id"
+            box = None if request["operation"] == "relay.register" else self._box(request["payload"][object_field], identity)
             limit = self.fixture["scope"]["limits"]["message_bytes"] if box is None else box["registration"]["limits"]["message_bytes"]
             R.require(len(raw) <= min(limit, 65536), "resource_limit")
             def apply():
@@ -357,6 +369,31 @@ class RelayHarness:
             binding = {key: deepcopy(record[key]) for key in ("principal", "outer_role", "inner_role")}
         # 与 Relay 事务明确分离；撤销可在游戏调用期间发生，结果仍只能保守地标记 unknown。
         return C.codec.canonical(self.port.dispatch(claim, binding, now=now, fault=fault))
+
+    def compact_closed_mailboxes(self, *, now, maximum=1, fault=None):
+        """可信维护端口：仅清理关闭邮箱的载荷，保留防重放墓碑；不是 wire 操作。"""
+        R.require(type(maximum) is int and 1 <= maximum <= self.MAX_MAILBOXES, "invalid_arguments")
+        with self.lock:
+            self._maintain(now)
+            R.require(self.state["ledger_healthy"], "temporarily_unavailable")
+            def compact():
+                selected = [box for box in self.state["mailboxes"].values()
+                            if box["state"] == "closed" and not box.get("compacted", False)][:maximum]
+                for box in selected:
+                    # _call 的终态分支只需要摘要、原 revision、主体角色及派发知识。
+                    box["requests"] = {key: {"digest": record["digest"], "inner_role": record["inner_role"],
+                        "state": record["state"], "known_dispatch": record["known_dispatch"],
+                        "call": {"route_revision": record["call"]["route_revision"]}}
+                        for key, record in box["requests"].items()}
+                    box["claims"], box["pulls"] = {}, {}
+                    # pull 回执含完整 claim 和内层 proof；关闭后本就不可读取。
+                    box["controls"] = {key: receipt for key, receipt in box["controls"].items()
+                                       if key[1] != "relay.pull"}
+                    box["compacted"] = True
+                return {"compacted": len(selected), "remaining": sum(
+                    box["state"] == "closed" and not box.get("compacted", False)
+                    for box in self.state["mailboxes"].values())}
+            return self._transaction(compact, fault)
 
     def restart_from_mock_ledger(self, *, now, intact=True):
         R.require(type(intact) is bool, "invalid_arguments")

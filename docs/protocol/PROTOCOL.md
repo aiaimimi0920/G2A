@@ -168,6 +168,11 @@ ID：offer/grant/invitation/session 全局不可预测；message 去重键为 `(
 
 自动规则匹配完整已批准权限条件（身份、实例 epoch、descriptor revision、绑定信任、能力、呈现及隐私）。规则使用 `rule_scope_key`，从 Scope 中排除本次生成的绝对 created_at 和 expires_at，但保留可授权最长时长、所有权限条件和限制；规则本身有独立到期时间。不能排除身份、实例或描述 revision 来换取命中。本版为安全和确定性选择严格匹配：改变权限条件即重新批准，包含收缩；后续可单独设计可证明的子集复用，不在本版隐含。新的 grant 到期不超过规则剩余有效期、用户允许最长时长和当前描述允许时长。规则可持久保存，但必须绑定身份验证根及撤销 revision，不能以保存某个 IP 即永久信任。自动加入不授权自动启动新应用或转移设备。
 
+固定模型在完整 offer.create 准备后尝试一次自动批准；不在查询或原请求重试时重新尝试。
+OfferView 的可选 auto_rule 引用标记原批准使用/创建的规则 ID 与 revision，不表示规则当前有效。
+规则撤销仅所属玩家可执行，不隐式级联原 Grant/邀请/会话；本地规则另绑可信应用注册与设备，
+remember 不生成启动许可。精确时长匹配和剩余期限规则见 [自动批准证明](AUTO_RULE_PROOF.md)。
+
 邀请有效期 `min(grant.expires_at, offer.decision_deadline, issue_time + invitation_ttl)`；批准、领取、加入三个时点均检查 scope/grant/instance。加入请求的形象/策略不能覆盖已批准值；可变的呈现观察是设备端授权的事实，单独写入 JoinIntent 后固定，重取若变化则冲突，不改变批准条款。
 
 拒绝、超时、认证失败、启动失败均不产生有效会话。允许用户拒绝已经 stale 的 offer；拒绝不强迫先刷新描述。申请/邀请在批准后过期也不意味着必须自动重复弹窗。
@@ -182,6 +187,11 @@ ID：offer/grant/invitation/session 全局不可预测；message 去重键为 `(
 | session | 停止新数据/行动提交，查询已授权结果仍按结果读取范围 | 删除伙伴记忆 |
 | capability | 新请求/未领取请求不可执行；已领取动作在副作用时点再次检查 | 已发生的效果能被消除 |
 | relay | 停止转发且废止外层凭据；会话显式关闭或按租约收敛 | relay 代替游戏判定世界结果 |
+
+固定单会话模型中的 capability 撤销以已批准 action ID 定位对象，与该会话的
+capabilities_revision 共用 CAS；撤销屏障不能由 capability.replace 重新添加相同定义而
+清除，且不撤销历史结果读权。此受限装配不代表实例级多会话传播，详见
+[能力撤销证明](CAPABILITY_REVOKE_PROOF.md)。
 
 ## 8. 会话、租约与持久恢复
 

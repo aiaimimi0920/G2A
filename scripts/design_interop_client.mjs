@@ -237,6 +237,62 @@ try {
   assert.equal((await wire(request('operation.get', { operation: 'session.join', original_request_id: 'core-join' },
     'core-completed'), 'agent-identity')).result.state, 'done');
 
+  // 自动规则必须使用显式期限/时长；撤销只影响未来批准，不撤销已有 Grant/邀请。
+  await command({ kind: 'admission_start' });
+  const ruleOfferRequest = request('offer.create', { entry: 'companion', descriptor_id: d.descriptor_id,
+    expected_descriptor_revision: d.revision, requested }, 'rule-offer');
+  const ruleOffer = (await wire(ruleOfferRequest, 'agent-identity')).result;
+  const ruleDecision = { ...decision, offer_id: ruleOffer.offer_id, scope_digest: ruleOffer.scope_digest,
+    remember: true, rule_expires_at: 900000, maximum_grant_duration_ms: 300000, decision_ref: 'rule-consent' };
+  await command({ kind: 'admission_decision', payload: ruleDecision });
+  const ruleApprove = request('offer.decide', ruleDecision, 'rule-approve');
+  assert.equal((await wire(ruleApprove, 'player-fixture', { fault: 'after_commit' })).fixture_fault, 'after_commit');
+  const remembered = (await wire(ruleApprove, 'player-fixture')).result;
+  assert.deepEqual(remembered.auto_rule, { rule_id: 'rule-1', revision: 1 });
+  const automaticRequest = { ...ruleOfferRequest, request_id: 'automatic-offer' };
+  const automatic = (await wire(automaticRequest, 'agent-identity')).result;
+  assert.equal(automatic.state, 'approved'); assert.notEqual(automatic.grant_id, remembered.grant_id);
+  assert.deepEqual(automatic.auto_rule, remembered.auto_rule);
+  assert.equal(automatic.scope_digest, digest('scope', automatic.immutable_scope));
+  const ruleInvitation = (await wire(request('invitation.redeem', { offer_id: automatic.offer_id,
+    join_intent: { scope_digest: automatic.scope_digest } }, 'automatic-redeem'), 'agent-identity')).result;
+  const revokeRule = request('permission.revoke', { object_type: 'auto_rule', object_id: remembered.auto_rule.rule_id,
+    expected_revision: remembered.auto_rule.revision }, 'rule-revoke');
+  assert.equal((await wire(revokeRule, 'game-fixture')).error.code, 'permission_denied');
+  assert.equal((await wire(revokeRule, 'player-fixture', { fault: 'after_commit' })).fixture_fault, 'after_commit');
+  const revokedRule = (await wire(revokeRule, 'player-fixture')).result;
+  assert.deepEqual(revokedRule, { object_type: 'auto_rule', object_id: 'rule-1', revision: 2, state: 'revoked' });
+  const ruleStatus = request('operation.get', { operation: 'permission.revoke', original_request_id: 'rule-revoke' }, 'rule-status');
+  assert.deepEqual((await wire(ruleStatus, 'player-fixture')).result.revocation, revokedRule);
+  assert.equal((await wire(ruleStatus, 'agent-identity')).error.code, 'permission_denied');
+  assert.equal((await wire({ ...ruleOfferRequest, request_id: 'after-rule-revoke' }, 'agent-identity')).result.state, 'pending');
+  // 原自动批准回执仍是 approved；重放原 remember 决定不会复活已撤规则。
+  assert.deepEqual((await wire(automaticRequest, 'agent-identity')).result, automatic);
+  await wire(ruleApprove, 'player-fixture');
+  assert.equal((await wire({ ...ruleOfferRequest, request_id: 'after-consent-replay' }, 'agent-identity')).result.state, 'pending');
+  const ruleJoin = request('session.join', { invitation_id: ruleInvitation.invitation_id,
+    join_intent: ruleInvitation.join_intent }, 'automatic-join');
+  assert.equal((await wire(ruleJoin, ruleInvitation.invitation_credential)).result.status, 'join_pending');
+  await command({ kind: 'admission_finish' });
+  const ruleDelivery = (await wire(ruleJoin, ruleInvitation.invitation_credential)).result;
+  assert.equal(ruleDelivery.status, 'ready');
+  // 同时补上一包 capability 撤销的独立客户端路径：取消 pending，保留读权且定义更新不恢复权限。
+  const ruleAction = request('action.request', { ...envelope('rule-action', 'action.request', agent,
+    { action: 'find-key', arguments: { room: 'hall' }, deadline: 30000 }), expected_capabilities_revision: 1 }, 'rule-action');
+  assert.ok((await wire(ruleAction, ruleDelivery.control_credential)).result);
+  const revokeCapability = request('permission.revoke', { object_type: 'capability', object_id: 'find-key',
+    expected_revision: 1 }, 'rule-capability-revoke');
+  assert.equal((await wire(revokeCapability, 'player-fixture')).result.revision, 2);
+  assert.equal((await wire(request('action.query', { session_id: 's1', action_id: 'rule-action' }, 'rule-action-query'),
+    ruleDelivery.result_read_handle)).result.state, 'cancelled');
+  assert.equal((await wire(request('capability.replace', { instance, expected_revision: 2, definitions: d.actions },
+    'rule-capability-replace'), 'game-fixture')).result.revision, 3);
+  const ruleSnapshot = (await wire(request('session.snapshot', { session_id: 's1' }, 'rule-snapshot'),
+    ruleDelivery.control_credential)).result;
+  assert.deepEqual(ruleSnapshot.definitions, []); assert.equal(ruleSnapshot.session.state, 'active');
+  assert.equal((await wire(request('operation.get', { operation: 'permission.revoke', original_request_id: 'rule-capability-revoke' },
+    'rule-capability-status'), 'player-fixture')).result.state, 'done');
+
   await command({ kind: 'control_start', high_risk: true });
   const controlDescriptor = (await wire(request('describe', { instance }, 'control-describe'), 'agent-identity')).result;
   const controlOffer = (await wire(request('offer.create', { entry: 'companion', descriptor_id: controlDescriptor.descriptor_id,
@@ -892,17 +948,44 @@ try {
   assert.equal(rFreshClaimed.code, 'request_gone'); assert.equal(rFreshClaimed.outcome, 'unknown');
   assert.equal(rFreshQueued.code, 'relay_not_dispatched'); assert.equal(rFreshQueued.outcome, 'not_accepted');
   assert.equal((await command({ kind: 'relay_credential', mailbox_id: rMailbox, recipient: 'relay-agent-identity', now: rNow })).fixture_rejected, 'request_gone');
+  assert.equal((await command({ kind: 'relay_compact', now: rNow, fault: 'before_commit' })).fixture_fault, 'before_commit');
+  assert.equal((await command({ kind: 'relay_compact', now: rNow, fault: 'after_commit' })).fixture_fault, 'after_commit');
   await command({ kind: 'relay_restart', now: rNow });
+  assert.deepEqual(await command({ kind: 'relay_compact', now: rNow }), { compacted: 0, remaining: 0 });
+  assert.equal((await wire(rRevoke, 'relay-player-identity', { now: rNow })).result.route_revision, 2);
+  assert.equal((await wire(request('relay.call', rHoldClaimed, 'r-compacted-claimed'), 'relay-agent-identity', { now: rNow })).error.outcome, 'unknown');
+  assert.equal((await wire(request('relay.call', rHoldQueued, 'r-compacted-queued'), 'relay-agent-identity', { now: rNow })).error.outcome, 'not_accepted');
   const rFinal = await command({ kind: 'relay_observe' });
   assert.deepEqual(rFinal.route_revisions, [2]); assert.equal(rFinal.world_effects, 2); assert.equal(rFinal.chat_events, 1);
   assert.equal(rFinal.lease_deadline, rBeforeExpiry.lease_deadline);
   assert.deepEqual((await wire(rQuery, rReady.result_read_handle, { now: rNow })).result.known_result, { item: 'gold-key' });
+  // 独立新配对验证通用对象入口；不能借用游戏 player 身份撤销 Relay。
+  await command({ kind: 'relay_start' });
+  const grBox = (await wire(rRegistration, 'relay-player-identity')).result;
+  const grRevoke = request('permission.revoke', { object_type: 'relay', object_id: grBox.mailbox_id,
+    expected_revision: 1 }, 'gr-revoke');
+  assert.equal((await wire(grRevoke, 'player-fixture')).error.code, 'unauthenticated');
+  assert.equal((await wire(grRevoke, 'relay-agent-identity')).error.code, 'permission_denied');
+  assert.equal((await wire(grRevoke, 'relay-player-identity', { fault: 'before_commit' })).fixture_fault, 'before_commit');
+  assert.deepEqual((await command({ kind: 'relay_observe' })).route_revisions, [1]);
+  assert.equal((await wire(grRevoke, 'relay-player-identity', { fault: 'after_commit' })).fixture_fault, 'after_commit');
+  await command({ kind: 'relay_restart', now: 1000 });
+  assert.deepEqual((await wire(grRevoke, 'relay-player-identity')).result,
+    { object_type: 'relay', object_id: grBox.mailbox_id, revision: 2, state: 'closed' });
+  const grChanged = structuredClone(grRevoke); grChanged.payload.expected_revision = 2;
+  assert.equal((await wire(grChanged, 'relay-player-identity')).error.code, 'id_conflict');
+  assert.equal((await wire(request('relay.revoke', { mailbox_id: grBox.mailbox_id,
+    expected_route_revision: 1 }, 'gr-revoke'), 'relay-player-identity')).error.code, 'approval_stale');
+  assert.equal((await wire(request('relay.revoke', { mailbox_id: grBox.mailbox_id,
+    expected_route_revision: 2 }, 'gr-revoke'), 'relay-player-identity')).result.route_revision, 2);
   console.log(JSON.stringify({ passed: true, node: process.version, codec_cases: codecCases,
     fixture_commands: calls, wire_calls: wireCalls, wire_operations: [...operations].sort(),
     recovered_events: page.events.length, world_effects: 2, admission_ready_events: readyPage.events.length,
     control_events: controlPage.events.length, control_change_events: controlPage.events.filter(e => e.envelope.type === 'session.control_changed').length,
     mock_restart: true, presentation_events: pEvents.events.length, presentation_render_calls: pDeviceA.render_calls + pDeviceB.render_calls,
     minimal_core: true, minimal_core_chat_events: corePage.events.length,
+    auto_rule_revision: revokedRule.revision, automatic_offer_state: automatic.state,
+    post_rule_revoke_session: ruleSnapshot.session.state, revoked_capability_definitions: ruleSnapshot.definitions.length,
     compacted_receipts: receiptCompaction.removed, post_compaction_world_effects: afterReceiptCompaction.world_effects,
     operation_status_effects: statusAfterQueries.world_effects, operation_status_partial: statusPartial.action.effect,
     operation_status_confirmations: statusAfterQueries.consumed_confirmations, operation_status_read_only: true,
@@ -915,6 +998,7 @@ try {
     privacy_dispatch_gap_effects: privacyDispatchGap.effects, privacy_filtered_events: privacyBefore.events.length - privacyAfter.events.length,
     forward_accepted_messages: forwardRecovered.chat_events, forward_receipts: forwardRecovered.receipts,
     forward_rejoined_generation: rejoinedSeat.membership_generation, forward_filtered_events: forwardBefore.events.length - forwardAfter.events.length,
+    generic_relay_revocation: true,
     relay_mailboxes: rFinal.mailboxes, relay_chat_events: rFinal.chat_events, relay_world_effects: rFinal.world_effects,
     relay_dispatch_gap_executions: rAfterGap.dispatch_calls - rBeforeGap.dispatch_calls,
     relay_closed_route_revision: rFinal.route_revisions[0], relay_terminal_records: rFinal.states,

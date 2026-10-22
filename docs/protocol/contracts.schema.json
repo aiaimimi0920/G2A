@@ -1103,6 +1103,22 @@
         },
         "grant_id": {
           "$ref": "#/$defs/Id"
+        },
+        "auto_rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "rule_id": {
+              "$ref": "#/$defs/Id"
+            },
+            "revision": {
+              "$ref": "#/$defs/Revision"
+            }
+          },
+          "required": [
+            "rule_id",
+            "revision"
+          ]
         }
       },
       "required": [

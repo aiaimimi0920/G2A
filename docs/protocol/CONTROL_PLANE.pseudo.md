@@ -131,6 +131,7 @@ function create_offer(caller_proof, entry, candidate, requested, nonce):
     return_same_or_conflict(offer_nonce_key(actor, entry, nonce), digest(requested))
     offer = new pending Offer(freeze(scope), digest(scope), bounded_deadline,
       launch_required = verified_local_companion_not_running)
+    attempt_automatic(offer) // 与此创建同事务；必须先完成本地启动事实/注册绑定
     persist offer and nonce receipt
     return offer_without_secrets
 
@@ -152,6 +153,7 @@ function decide(player_proof, offer_id, digest_seen, allow, remember, launch_per
     if remember:
       save revocable auto_rule(player, rule_scope_key(grant.scope),
         explicit_rule_expiry, maximum_grant_duration, original_consent_evidence)
+      offer.auto_rule = {rule_id, revision} // 原批准引用，不是规则当前状态或凭据
     save launch_permission separately; it is not implied by remember
     commit grant + offer + receipt + outbox
     return approved  // 不包含伙伴邀请或管理员令牌
@@ -288,7 +290,9 @@ function close_in_transaction(session, reason):
 function revoke(caller, object_type, object_id):
   authenticate and verify caller owns revocation authority for exact object
   atomic(affected_scope):
-    if auto_rule: mark revoked; no implicit session close
+    if auto_rule:
+      require actor == rule.player; compare rule.revision
+      mark revoked and increment revision; no implicit grant/invitation/session close
     if invitation: mark unconsumed invitation revoked; report consumed if already joined
     if grant:
       mark revoked; revision++

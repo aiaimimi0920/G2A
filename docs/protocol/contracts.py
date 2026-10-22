@@ -123,7 +123,8 @@ TYPES = {
                        revision="Revision", state=enum("active", "revoked", "expired"), expires_at="Nat"),
     "OfferView": obj(offer_id="Id", applicant="Principal", immutable_scope="Scope", scope_digest="Digest",
                      decision_deadline="Nat", launch_required="Bool",
-                     state=enum("pending", "approved", "denied", "expired", "stale"), **{"grant_id?": "Id"}),
+                     state=enum("pending", "approved", "denied", "expired", "stale"),
+                     **{"grant_id?": "Id", "auto_rule?": obj(rule_id="Id", revision="Revision")}),
     "JoinIntent": obj(scope_digest="Digest", **{"selected_device?": "Id", "presentation_observation?": "DeviceObservation"}),
     "DeviceObservation": obj(device_id="Id", device_epoch="Revision", baseline_visible="Bool", manual_revision="Revision", proof_ref="Id"),
     "Cursor": obj(session_id="Id", instance_epoch="Id", sequence="Nat"),
@@ -267,12 +268,12 @@ operation("describe", "agent player", "control", "core.session", "read", obj(ins
           "验证 endpoint 身份并按主体过滤；公开发现只返回 PublicDescriptor，不调用此完整描述接口。")
 operation("offer.create", "agent player", "control", "core.session", "control", obj(entry=enum("game", "companion"),
           descriptor_id="Id", expected_descriptor_revision="Revision", requested="Requested"), ref("OfferView"),
-          "companion 入口 actor=agent；game 入口为玩家或经验证委托；固定 Scope 后不能替换身份。")
+          "companion 入口 actor=agent；game 入口为玩家或经验证委托；固定 Scope 后不能替换身份；当前规则精确匹配且无需启动时可同事务批准。")
 operation("offer.get", "agent player", "control", "core.session", "read", obj(offer_id="Id"), ref("OfferView"), "仅绑定主体可读。")
 operation("offer.decide", "player", "control", "core.session", "control", obj(offer_id="Id", scope_digest="Digest",
           allow="Bool", remember="Bool", launch_permission="Bool", decision_ref="Id",
           **{"rule_expires_at?": "Nat", "maximum_grant_duration_ms?": "Revision"}), ref("OfferView"),
-          "decision_ref 验证真实玩家交互；remember=true 必须同时提供规则期限与授权时长，false 禁止两字段；拒绝时两许可均为 false。")
+          "decision_ref 验证真实玩家交互；remember=true 必须提供独立规则期限与授权时长，返回 auto_rule 原批准引用；false 禁止两字段；拒绝时两许可均为 false。")
 operation("invitation.redeem", "agent", "control", "core.session", "control", obj(offer_id="Id", join_intent="JoinIntent"),
           choice(obj(invitation_id="Id", invitation_credential="Secret", expires_at="Nat", join_intent="JoinIntent"), "SecretStatus"),
           "仅 scope.agent；同 intent 重试；邀请秘密只交本人，绑定 Scope、玩家、实例及设备。")
@@ -314,7 +315,7 @@ operation("capability.replace", "game", "management", "actions", "control", obj(
 operation("membership.replace", "game", "management", "core.events", "control", obj(instance="Instance", expected_revision="Revision", verified_members="Principals", membership_proof_ref="Id"),
           obj(revision="Revision"), "基础席位也有成员代次；新增队伍席位需 team；重加入增加代次且不扩旧 Scope。")
 operation("permission.revoke", "player game", "control", "core.session", "control", ref("Revocation"), ref("RevocationResult"),
-          "按对象验证撤销权；game 只走管理入口；result_read 单独撤销不伪造不存在。")
+          "按对象验证撤销权；relay 对象先分派到 Relay owner 并按 relay.revoke 的角色/lane 授权，不采用本项游戏入口角色；auto_rule 仅所属玩家可撤且不级联已有 Grant；game 只走管理入口；result_read 单独撤销不伪造不存在。")
 operation("action.claim", "executor", "management", "actions", "control", obj(session_id="Id", action_id="Id", worker="Principal"),
           choice(obj(status=enum("claimed"), ticket="ExecutionTicket", arguments="JsonObject"), obj(status=enum("not_executable"), action="ActionResult")),
           "worker 必须登记；同控制请求可读原 ticket，ticket/step 仍唯一；新请求不领取已 executing 动作。")

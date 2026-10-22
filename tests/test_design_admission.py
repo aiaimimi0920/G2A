@@ -143,7 +143,7 @@ class AdmissionTests(unittest.TestCase):
             "expected_descriptor_revision": 1, "requested": changed}))
         self.assertEqual(self.create(now=2000)["immutable_scope"]["created_at"], 1000)
 
-    def test_deny_and_unsupported_remember_do_not_create_grant(self):
+    def test_deny_and_expired_remember_do_not_create_grant(self):
         offer = self.create()
         self.assertEqual(self.decide(offer, allow=False)["state"], "denied")
         self.assert_error("consent_required", lambda: self.invite(offer))
@@ -152,9 +152,9 @@ class AdmissionTests(unittest.TestCase):
         offer = self.create()
         payload = {"offer_id": offer["offer_id"], "scope_digest": offer["scope_digest"], "allow": True,
                    "remember": True, "launch_permission": False, "decision_ref": "remember",
-                   "rule_expires_at": 600000, "maximum_grant_duration_ms": 300000}
+                   "rule_expires_at": 1000, "maximum_grant_duration_ms": 300000}
         self.h.decisions["remember"] = {"player": self.f["player"], "payload": payload}
-        self.assert_error("feature_unsupported", lambda: self.send("offer.decide", payload, "player-fixture"))
+        self.assert_error("invalid_arguments", lambda: self.send("offer.decide", payload, "player-fixture"))
         self.assertEqual(self.h.state["grants"], {})
 
     def test_descriptor_change_or_expired_offer_cannot_be_approved(self):

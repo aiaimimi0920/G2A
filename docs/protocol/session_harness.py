@@ -28,7 +28,8 @@ class SessionHarness(S.EventServer):
         self.pending_sync = False
         self.membership_proofs = deepcopy(membership_proofs or {})
         self.player_seat_proofs = deepcopy(player_seat_proofs or {})
-        self.state.update(session_controls={}, member_generations=deepcopy(self.members), result_access_revision=1)
+        self.state.update(session_controls={}, member_generations=deepcopy(self.members), result_access_revision=1,
+                          revoked_capabilities=set())
 
     def _transaction(self, operation, fault):
         if fault not in (None, "before_commit", "after_commit"):
@@ -278,12 +279,27 @@ class SessionHarness(S.EventServer):
             result = deepcopy(self.state["session"])
         elif op == "permission.revoke":
             target, oid = payload["object_type"], payload["object_id"]
-            R.require(target in {"grant", "session", "result_read"}, "unsupported_operation")
-            revision = self.state["result_access_revision"] if target == "result_read" else self.state["grant"]["revision"]
-            target_id = self.state["grant"]["grant_id"] if target == "grant" else session["session_id"]
+            R.require(target in {"grant", "session", "result_read", "capability"}, "unsupported_operation")
+            if target == "capability":
+                R.require("actions" in scope["features"], "feature_unsupported")
+                R.require(oid in scope["action_ids"], "permission_denied")
+                revision, target_id = session["capabilities_revision"], oid
+            else:
+                revision = self.state["result_access_revision"] if target == "result_read" else self.state["grant"]["revision"]
+                target_id = self.state["grant"]["grant_id"] if target == "grant" else session["session_id"]
             R.require(oid == target_id, "permission_denied")
             R.require(payload["expected_revision"] == revision, "generation_conflict")
-            if target == "result_read":
+            if target == "capability":
+                # 撤销是当前 Scope 的单向权限屏障；定义更新不能重新授予权限。
+                self.state["revoked_capabilities"].add(oid)
+                session["capabilities_revision"] += 1
+                self.state["definitions"] = [d for d in self.state["definitions"] if d["id"] != oid]
+                if self.action_model.definition is not None and self.action_model.definition["id"] == oid:
+                    self.action_model.definition_available = False
+                    self._stop_action(now)
+                self._notice("capability.update", {"revision": session["capabilities_revision"],
+                             "definitions": self.state["definitions"]}, now)
+            elif target == "result_read":
                 self.action_model.read_revoked = True
                 for action_id in self.state["actions"]:
                     self.state["result_read_revoked"].add((R.principal_key(scope["agent"]), action_id))
@@ -300,6 +316,7 @@ class SessionHarness(S.EventServer):
             session[revision_key] += 1
             if op == "capability.replace":
                 effective = [d for d in payload["definitions"] if d["id"] in scope["action_ids"] and
+                             d["id"] not in self.state["revoked_capabilities"] and
                              C.codec.digest("action-definition", d) == scope["approved_action_digests"].get(d["id"])]
                 self.state["definitions"] = deepcopy(effective)
                 self.action_model.definition_available = any(d["id"] == self.action_model.definition["id"] for d in effective)

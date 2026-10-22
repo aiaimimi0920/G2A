@@ -263,6 +263,14 @@ def serve():
                 output = {"fixture_fault": frame["fault"]}
             except checks.ContractError as error:
                 output = {"fixture_rejected": error.code}
+        elif kind == "relay_compact":
+            try:
+                output = harness.compact_closed_mailboxes(now=frame.get("now", 1000),
+                    maximum=frame.get("maximum", 1), fault=frame.get("fault"))
+            except fault_type:
+                output = {"fixture_fault": frame["fault"]}
+            except checks.ContractError as error:
+                output = {"fixture_rejected": error.code}
         elif kind == "relay_restart":
             harness = harness.restart_from_mock_ledger(now=frame.get("now", 1000), intact=frame.get("intact", True))
             output = {"restarted_relay_mock_ledger": True}

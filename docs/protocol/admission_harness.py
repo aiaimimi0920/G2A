@@ -38,7 +38,7 @@ class AdmissionHarness:
                            "game-fixture": {"role": "game", "principal": deepcopy(fixture["game"])}}
         self.state = {"descriptor": deepcopy(fixture["descriptor"]), "offers": {}, "grants": {},
                       "invitations": {}, "invitation_credentials": {}, "receipts": {},
-                      "decision_used": {}, "admission": None, "last_now": 0}
+                      "decision_used": {}, "auto_rules": {}, "admission": None, "last_now": 0}
 
     def _transaction(self, function, fault=None):
         R.require(fault in (None, "before_commit", "after_commit"), "invalid_arguments")
@@ -172,6 +172,8 @@ class AdmissionHarness:
                 identity = self._identity(credential, op)
                 lane = "management" if identity["role"] == "game" else C.catalog.OPERATIONS[op]["lane"]
                 C.authorize_route(op, identity["role"], lane, self.PROFILE)
+                if prejoin_revoke and payload["object_type"] == "auto_rule":
+                    R.require(identity["role"] == "player", "permission_denied")
                 R.require(request["version"] == self.fixture["scope"]["version"], "unsupported_version")
                 R.require(len(raw) <= self.state["descriptor"]["limits"]["message_bytes"], "resource_limit")
                 _, activated = C.validate_active_request(raw, selected_extensions={}, supported_extensions=())
@@ -196,6 +198,8 @@ class AdmissionHarness:
                 R.require(len(self.state["receipts"]) < (256 if prejoin_revoke else 128), "resource_limit")
                 if op == "offer.create":
                     record = self._create(payload, identity, now)
+                    # 必须在派生层完成 launch_required/本地绑定后判断，不能在基类 _create 内提前批准。
+                    self._attempt_automatic(record, now)
                     receipt = {"kind": "offer", "ref": record["view"]["offer_id"]}
                 elif op == "offer.decide":
                     record = self._decide(payload, identity, now)
@@ -247,12 +251,9 @@ class AdmissionHarness:
         self._current_scope(record, now)
         if payload["allow"]:
             self._decision_options(record, payload, evidence, now)
-            gid = "grant-" + str(len(self.state["grants"]) + 1)
-            scope = deepcopy(view["immutable_scope"])
-            self.state["grants"][gid] = {"grant_id": gid, "scope": scope, "scope_digest": view["scope_digest"],
-                "approver": deepcopy(identity["principal"]), "consent_evidence_ref": payload["decision_ref"],
-                "revision": 1, "state": "active", "expires_at": scope["expires_at"]}
-            view.update(state="approved", grant_id=gid)
+            if payload["remember"]:
+                self._remember_rule(record, payload, now)
+            self._approve(record, payload["decision_ref"])
         else:
             view["state"] = "denied"
         record["decision"] = decision
@@ -260,8 +261,58 @@ class AdmissionHarness:
         return record
 
     def _decision_options(self, record, payload, evidence, now):
-        """默认准入配置不支持自动规则或启动；专门的本地启动层在同一事务中绑定许可。"""
-        R.require(not payload["remember"] and not payload["launch_permission"], "feature_unsupported")
+        """默认准入不启动应用；专门的本地启动层在同一事务中绑定独立许可。"""
+        R.require(not payload["launch_permission"], "feature_unsupported")
+
+    @staticmethod
+    def _rule_key(scope, maximum_grant_duration_ms):
+        return C.codec.digest("auto-rule", {"scope_without_timestamps": {
+            key: value for key, value in scope.items() if key not in {"created_at", "expires_at"}},
+            "maximum_grant_duration_ms": maximum_grant_duration_ms})
+
+    def _automatic_context(self, record):
+        """可信适配器补充 Scope 之外的授权上下文；不是请求方提交的可选字段。"""
+        return {}
+
+    def _approve(self, record, consent_ref):
+        view = record["view"]
+        scope = deepcopy(view["immutable_scope"])
+        gid = "grant-" + str(len(self.state["grants"]) + 1)
+        self.state["grants"][gid] = {"grant_id": gid, "scope": scope, "scope_digest": view["scope_digest"],
+            "approver": deepcopy(scope["player"]), "consent_evidence_ref": consent_ref,
+            "revision": 1, "state": "active", "expires_at": scope["expires_at"]}
+        view.update(state="approved", grant_id=gid)
+
+    def _remember_rule(self, record, payload, now):
+        scope = record["view"]["immutable_scope"]
+        maximum = payload["maximum_grant_duration_ms"]
+        R.require(payload["rule_expires_at"] > now and maximum <= scope["expires_at"] - scope["created_at"],
+                  "invalid_arguments")
+        R.require(len(self.state["auto_rules"]) < 16, "resource_limit")
+        rid = "rule-" + str(len(self.state["auto_rules"]) + 1)
+        self.state["auto_rules"][rid] = {"rule_id": rid, "revision": 1, "state": "active",
+            "player": deepcopy(scope["player"]), "key": self._rule_key(scope, maximum),
+            "maximum_grant_duration_ms": maximum, "expires_at": payload["rule_expires_at"],
+            "context": deepcopy(self._automatic_context(record)), "consent_ref": payload["decision_ref"]}
+        record["view"]["auto_rule"] = {"rule_id": rid, "revision": 1}
+
+    def _attempt_automatic(self, record, now):
+        view, requested = record["view"], record["requested"]
+        if view["state"] != "pending" or view["launch_required"]:
+            return
+        self._current_scope(record, now)
+        scope = view["immutable_scope"]
+        key = self._rule_key(scope, requested["maximum_grant_duration_ms"])
+        context = C.codec.canonical(self._automatic_context(record))
+        for rule in self.state["auto_rules"].values():
+            if (rule["state"] != "active" or rule["key"] != key or
+                    not now < rule["expires_at"] or scope["expires_at"] > rule["expires_at"] or
+                    scope["expires_at"] - scope["created_at"] > rule["maximum_grant_duration_ms"] or
+                    C.codec.canonical(rule["context"]) != context):
+                continue
+            self._approve(record, rule["consent_ref"])
+            view["auto_rule"] = {"rule_id": rule["rule_id"], "revision": rule["revision"]}
+            return
 
     def _redeem(self, payload, identity, now):
         record = self._offer(payload["offer_id"], identity)
@@ -418,8 +469,8 @@ class AdmissionHarness:
 
     def _revoke(self, payload, now):
         kind, oid = payload["object_type"], payload["object_id"]
-        R.require(kind in {"grant", "invitation"}, "unsupported_operation")
-        collection = self.state["grants"] if kind == "grant" else self.state["invitations"]
+        R.require(kind in {"grant", "invitation", "auto_rule"}, "unsupported_operation")
+        collection = self.state[{"grant": "grants", "invitation": "invitations", "auto_rule": "auto_rules"}[kind]]
         R.require(oid in collection, "permission_denied")
         target = self._grant(oid) if kind == "grant" else collection[oid]
         R.require(target["revision"] == payload["expected_revision"], "generation_conflict")

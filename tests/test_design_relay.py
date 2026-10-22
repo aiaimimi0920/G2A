@@ -716,5 +716,179 @@ class RelayTests(unittest.TestCase):
                 self.assertEqual(self.h.port.dispatch_calls, 0)
 
 
+    def generic_revoke(self, *, rid="generic-revoke", revision=1, credential="relay-player-identity", fault=None):
+        return self.send("permission.revoke", {"object_type": "relay", "object_id": self.mid,
+                         "expected_revision": revision}, credential, rid=rid, fault=fault)
+
+    def test_generic_revoke_uses_same_owner_and_preserves_game(self):
+        self.register()
+        before = deepcopy(self.h.game.state)
+        result = self.generic_revoke()["result"]
+        self.assertEqual(result, {"object_type": "relay", "object_id": self.mid, "revision": 2, "state": "closed"})
+        self.assertEqual(before, self.h.game.state)
+        self.assertTrue(all(value["state"] == "revoked" for value in self.h.state["credentials"].values()))
+
+    def test_generic_revoke_rejects_game_inner_and_other_outer_roles(self):
+        self.register()
+        for token in ("player-fixture", "agent-identity"):
+            self.rejected("unauthenticated", lambda: self.generic_revoke(credential=token))
+        for token in ("relay-agent-identity", "relay-game-identity", self.tokens["agent"], self.tokens["game"]):
+            self.rejected("permission_denied", lambda: self.generic_revoke(credential=token))
+        self.assertEqual(self.box["state"], "open")
+
+    def test_generic_revoke_faults_and_restart_recover_original_receipt(self):
+        self.register()
+        before = deepcopy(self.box)
+        with self.assertRaises(H.InjectedFailure):
+            self.generic_revoke(fault="before_commit")
+        self.assertEqual(self.box, before)
+        with self.assertRaises(H.InjectedFailure):
+            self.generic_revoke(fault="after_commit")
+        self.h = self.h.restart_from_mock_ledger(now=1000)
+        self.assertEqual(self.generic_revoke()["result"]["revision"], 2)
+        self.rejected("id_conflict", lambda: self.generic_revoke(revision=2))
+        self.rejected("approval_stale", lambda: self.generic_revoke(rid="fresh"))
+
+    def test_generic_revoke_alias_ids_are_operation_scoped(self):
+        self.register()
+        self.generic_revoke(rid="same")
+        self.rejected("approval_stale", lambda: self.revoke(rid="same"))
+        self.assertEqual(self.revoke(rid="same", revision=2)["result"]["route_revision"], 2)
+        self.assertEqual(self.generic_revoke(rid="same")["result"]["revision"], 2)
+        self.assertEqual(len(self.box["controls"]), 1)
+
+    def test_generic_revoke_after_legacy_close_does_not_increment(self):
+        self.register()
+        self.revoke()
+        self.assertEqual(self.generic_revoke(revision=2)["result"]["revision"], 2)
+        self.assertEqual(len(self.box["controls"]), 1)
+
+    def test_generic_revoke_reserved_capacity_and_closed_queries(self):
+        self.register()
+        self.box["controls"] = {("filled", i): {} for i in range(512)}
+        self.assertEqual(self.generic_revoke()["result"]["state"], "closed")
+        for i in range(20):
+            self.generic_revoke(rid="closed-" + str(i), revision=2)
+        self.assertEqual(len(self.box["controls"]), 513)
+
+    def test_generic_revoke_keeps_queued_and_claimed_knowledge_distinct(self):
+        self.register()
+        self.call()
+        self.pull()
+        queued = self.call_payload(relay_id="queued")
+        self.call(queued)
+        self.generic_revoke()
+        error = self.rejected("request_gone", lambda: self.call(credential="relay-agent-identity"))
+        self.assertEqual(error["outcome"], "unknown")
+        error = self.rejected("relay_not_dispatched", lambda: self.call(queued, credential="relay-agent-identity"))
+        self.assertEqual(error["outcome"], "not_accepted")
+
+    def test_generic_revoke_requires_fresh_controller_after_token_revocation(self):
+        self.register()
+        self.generic_revoke(credential=self.tokens["player"])
+        self.rejected("unauthenticated", lambda: self.generic_revoke(credential=self.tokens["player"]))
+        self.assertEqual(self.generic_revoke()["result"]["revision"], 2)
+
+
+    def test_closed_compaction_removes_all_relay_payload_copies(self):
+        self.register()
+        self.call()
+        claim = self.pull()[0]
+        self.reply(claim, self.dispatch(claim))
+        self.revoke()
+        game_before, port_before = deepcopy(self.h.game.state), deepcopy(self.h.port.journal)
+        self.assertEqual(self.h.compact_closed_mailboxes(now=1000), {"compacted": 1, "remaining": 0})
+        record = next(iter(self.box["requests"].values()))
+        self.assertEqual(set(record), {"digest", "inner_role", "state", "known_dispatch", "call"})
+        self.assertEqual(record["call"], {"route_revision": 1})
+        self.assertEqual(self.box["claims"], {})
+        self.assertEqual(self.box["pulls"], {})
+        self.assertFalse(any(key[1] == "relay.pull" for key in self.box["controls"]))
+        self.assertEqual(self.h.game.state, game_before)
+        self.assertEqual(self.h.port.journal, port_before)
+
+    def test_closed_compaction_preserves_dispatch_knowledge_and_conflicts(self):
+        self.register()
+        self.call(); self.pull()
+        queued = self.call_payload(relay_id="queued")
+        self.call(queued)
+        self.revoke(); self.h.compact_closed_mailboxes(now=1000)
+        self.assertEqual(self.rejected("request_gone", lambda: self.call(credential="relay-agent-identity"))["outcome"], "unknown")
+        self.assertEqual(self.rejected("relay_not_dispatched", lambda: self.call(queued, credential="relay-agent-identity"))["outcome"], "not_accepted")
+        changed = deepcopy(queued)
+        changed["call"]["operation_request"]["request_id"] = "different"
+        self.rejected("id_conflict", lambda: self.call(changed, credential="relay-agent-identity"))
+
+    def test_closed_compaction_faults_are_atomic_and_retry_is_noop(self):
+        self.register(); self.call(); self.pull(); self.generic_revoke()
+        before = deepcopy(self.box)
+        with self.assertRaises(H.InjectedFailure):
+            self.h.compact_closed_mailboxes(now=1000, fault="before_commit")
+        self.assertEqual(self.box, before)
+        with self.assertRaises(H.InjectedFailure):
+            self.h.compact_closed_mailboxes(now=1000, fault="after_commit")
+        self.assertTrue(self.box["compacted"])
+        self.assertEqual(self.h.compact_closed_mailboxes(now=1000)["compacted"], 0)
+        self.assertEqual(self.generic_revoke()["result"]["revision"], 2)
+
+    def test_closed_compaction_skips_open_and_validates_bounds(self):
+        self.register(); self.call(); self.pull()
+        before = deepcopy(self.box)
+        self.assertEqual(self.h.compact_closed_mailboxes(now=1000)["compacted"], 0)
+        self.assertEqual(self.box, before)
+        for maximum in (True, 0, -1, 9, 1.5):
+            with self.assertRaises(C.ContractError):
+                self.h.compact_closed_mailboxes(now=1000, maximum=maximum)
+
+    def test_closed_compaction_survives_restart_without_reviving_credentials(self):
+        self.register(); self.call(); self.generic_revoke()
+        self.h.compact_closed_mailboxes(now=1000)
+        self.h = self.h.restart_from_mock_ledger(now=1000)
+        self.assertEqual(self.generic_revoke()["result"]["revision"], 2)
+        self.rejected("unauthenticated", self.call)
+        self.assertEqual(self.rejected("relay_not_dispatched", lambda: self.call(credential="relay-agent-identity"))["outcome"], "not_accepted")
+        self.assertEqual(self.h.compact_closed_mailboxes(now=1000)["compacted"], 0)
+
+    def test_closed_compaction_expiry_commits_before_cleanup_fault(self):
+        self.registration["registration_expiry"] = 1001
+        self.register(); self.call()
+        with self.assertRaises(H.InjectedFailure):
+            self.h.compact_closed_mailboxes(now=1001, fault="before_commit")
+        self.assertEqual(self.box["state"], "closed")
+        self.assertNotIn("compacted", self.box)
+        self.assertEqual(self.h.compact_closed_mailboxes(now=1001)["compacted"], 1)
+
+    def re_pair(self, index):
+        proof = deepcopy(self.h.pairings["pairing-fixture"])
+        proof["proof_ref"] = "pairing-" + str(index)
+        self.h.pairings[proof["proof_ref"]] = proof  # 新的可信玩家同意，不是重用旧 proof。
+        registration = deepcopy(self.registration)
+        registration["pairing_proof_ref"] = proof["proof_ref"]
+        return self.send("relay.register", registration, "relay-player-identity", rid="register-" + str(index))["result"]
+
+    def test_closed_compaction_repair_isolates_old_mailbox_and_pairing(self):
+        original = self.register(); self.call(); self.revoke()
+        self.h.compact_closed_mailboxes(now=1000)
+        new = self.re_pair(2)
+        self.assertNotEqual(original["mailbox_id"], new["mailbox_id"])
+        self.assertEqual(self.send("relay.register", self.registration, "relay-player-identity", rid="registration")["result"], original)
+        # 原注册回执不是新路由/新凭据。
+        self.rejected("id_conflict", lambda: self.send("relay.register", self.registration, "relay-player-identity", rid="reuse-proof"))
+        new_token = self.h.credential_for(new["mailbox_id"], "relay-agent-identity", now=1000)
+        self.rejected("permission_denied", lambda: self.call(credential=new_token))
+        self.rejected("unauthenticated", self.call)
+
+    def test_closed_compaction_is_bounded_and_does_not_reclaim_identity_slots(self):
+        self.register(); self.revoke()
+        for index in range(2, 9):
+            result = self.re_pair(index)
+            self.send("relay.revoke", {"mailbox_id": result["mailbox_id"], "expected_route_revision": 1},
+                      "relay-player-identity", rid="close-" + str(index))
+        self.assertEqual(self.h.compact_closed_mailboxes(now=1000, maximum=3), {"compacted": 3, "remaining": 5})
+        self.assertEqual(self.h.compact_closed_mailboxes(now=1000, maximum=8), {"compacted": 5, "remaining": 0})
+        self.rejected("resource_limit", lambda: self.re_pair(9))
+        self.assertEqual(len(self.h.state["mailboxes"]), 8)
+
+
 if __name__ == "__main__":
     unittest.main()

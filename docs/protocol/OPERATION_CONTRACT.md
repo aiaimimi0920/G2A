@@ -40,6 +40,11 @@ control 是玩家/伙伴路径，不代表向公网开放 game token。验证角
 不能从 Principal.kind 或 payload 自报字段直接填入。
 
 SessionView、TransferView、OfferView、OperationView、PublicDescriptor 均不含凭据。
+
+OfferView 可选 auto_rule={rule_id,revision} 只标记创建/使用的原规则版本，不是当前有效性
+声明。记住批准和自动批准仍使用 offer.decide/offer.create；规则撤销通过
+permission.revoke 的 auto_rule 对象，只有所属玩家可撤，不隐式级联已签发对象。
+严格匹配和本地启动隔离见 [自动规则证明](AUTO_RULE_PROOF.md)。
 只有专门的邀请赎领响应和 ControlDelivery 可携带对应接收者秘密，必须满足认证、受众、
 设备、当前代次、ready、未撤销条件。Secret 的字符串 schema 只是结构约束，不证明熵或有效性。
 Grant/完整内部 Session/原始票据存储不能直接 JSON dump 成公开视图。

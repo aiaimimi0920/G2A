@@ -59,6 +59,10 @@ on lost commit acknowledgement or uncertain world effect:
 固定目录无法识别的内部错误保守映射 internal_failure/unknown，日志只记录受限诊断，
 不能把 Exception 文本塞入公开 details。
 
+客户端连续观察不能简单取最后一个 outcome：先前丢响应后的 unknown 不被后来一次
+not_accepted 覆盖，查询被拒也不证明原变更没发生。动作/取消/关闭的有界恢复模型和
+与准入/动作字节链的组合验证见 [请求恢复证明](REQUEST_RECOVERY_PROOF.md)。
+
 ## 证据级别
 
 此表是对每类端口故障的设计审查，自动证据来自错误映射、状态接缝、资源图、身份/范围

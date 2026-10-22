@@ -224,7 +224,19 @@ function revoke_mailbox(controller_proof, mailbox_id, expected_route_revision):
 
 控制面审批回包丢失也走 OperationReceipt；不能仅凭 Relay 的 claim 状态认定已经批准。客户端的退避有上限，且没有响应不得刷新会话或呈现租约。Relay 不能替代游戏续租，也不能通过重新配对延长旧 Grant。
 
+`permission.revoke(object_type=relay)` 是同一邮箱撤销状态机的通用对象入口，必须先按
+对象 owner 分派到 Relay，再使用 `relay.revoke` 的独立 controller/lane 授权；不接受
+游戏内层 player/game 凭据。object_id/expected_revision 对应 mailbox_id/route_revision。
+两入口的回执按 operation 分隔，但共享一次关闭与止损预留。原请求重放须重新认证；
+被作废的 mailbox token 不因幂等重试重新生效。此入口不开放 Relay operation.get，
+也不把内层游戏请求反向转发到 Relay。详见 [通用撤销证明](RELAY_REVOCATION_PROOF.md)。
+
 ## 6. 本地与云端端点安全规则
+
+关闭邮箱的载荷清理必须覆盖 requests、claims、pulls 及 pull 控制回执中的副本，保留
+请求摘要/原 revision/派发知识与撤销墓碑。新配对必须有新可信同意，不能复活旧身份或
+消除旧动作 unknown。固定模型不回收身份槽位，达到上限明确拒绝；具体事务与限制见
+[Relay 保留与清理证明](RELAY_RETENTION_PROOF.md)。
 
 - HTTP 回环例外仅用于显式 test-enrolled；local-verified 仍须受控身份通道，不能因为 127.0.0.1 就信任任意程序。
 - 非回环 TLS 验证服务端身份及配置的信任根，默认不接受重定向。资源下载的受控重定向是独立策略，不套用为携带会话凭据的 API 跳转许可。
