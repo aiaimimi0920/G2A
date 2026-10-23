@@ -15,6 +15,12 @@ schema `$defs` 是字段权威定义；`?` 只在 Python 声明源中表示可�
 不能把 `validate_request` 的成功理解为该请求已经授权、被接受或执行。
 `contract_checks.py` 仅实现结构及有限关系检查；身份/状态/世界效果仍按伪代码端口兑现。
 
+当前认证必须先于历史回执重放。enrolled 身份携带 `expires_at` 时，只接受严格整数且
+可信 `now < expires_at`；回执尚在保留期不延长身份期限。Relay 内层 proof 与其底层
+enrollment 的期限须同时有效，不能只验证较晚到期的一层。邀请凭据仍是独立能力，
+按自身邀请/Grant/消费规则核验，不因另一份 ambient enrollment 到期而隐式撤销。
+见 [公共身份期限审计](ENROLLMENT_EXPIRY_AUDIT.md) 和 [Relay 身份期限修复](RELAY_IDENTITY_EXPIRY_FIX.md)。
+
 `Version` 保持非空有界字符串，是为了容纳协商选定的精确版本，不以字符串格式推断兼容。
 测试使用 `fixture-only`，不注册或发布此版本；部署时必须检查支持集合与 Scope 中的版本。
 ID 字段本草案固定为 1–128 个 ASCII 字母/数字/`._~-`，首字符为字母或数字。
@@ -45,6 +51,12 @@ OfferView 可选 auto_rule={rule_id,revision} 只标记创建/使用的原规则
 声明。记住批准和自动批准仍使用 offer.decide/offer.create；规则撤销通过
 permission.revoke 的 auto_rule 对象，只有所属玩家可撤，不隐式级联已签发对象。
 严格匹配和本地启动隔离见 [自动规则证明](AUTO_RULE_PROOF.md)。
+
+`permission.revoke` 的 `launch_permission` 分支只允许原所属玩家按 revision 撤销独立
+启动许可；不级联 Grant、不关闭现有会话、不终止已经启动的进程。派发前必须重验许可，
+派发后未知不能因撤销变成未执行。旧 peer 必须拒绝未知枚举，不得降级为 grant/session
+撤销；旧快照缺少许可状态不得自动补 active。见 [启动许可撤销](LAUNCH_PERMISSION_REVOCATION.md)。
+
 只有专门的邀请赎领响应和 ControlDelivery 可携带对应接收者秘密，必须满足认证、受众、
 设备、当前代次、ready、未撤销条件。Secret 的字符串 schema 只是结构约束，不证明熵或有效性。
 Grant/完整内部 Session/原始票据存储不能直接 JSON dump 成公开视图。
@@ -84,6 +96,14 @@ done 是受理/取消收据完成，实际 pending/unknown/partial 等在可选 
 动作 ID、Receipt 和结果均重验当前结果读权、保留期和原成员代次；无权不能只泄露 ID。
 session.heartbeat/close 附带原响应快照，join/resume 附带当前会话视图；均不赋予控制权。
 未知/无权的查询拒绝不证明未接受；不通过查询重新执行、签发许可或跨域读取私有回执。
+
+资源回执首次提交冻结内部 `retain_until`，重试不续期；到期查询为 `request_gone`。
+关闭后有界清理回执，记录不存在时查询拒绝不证明原请求未受理；不能据此重新执行。
+回执清理和资源内容清理是独立门禁，见 [资源回执保留期](ASSET_RECEIPT_RETENTION_PROOF.md)。
+
+启动回执另采用最短保留期后的显式终态回收，不将 pending 按年龄删除；未回收历史
+回执仍可读。回收后保留许可的原 request_id 消费屏障，旧 ID 不可重新受理；查询
+不存在记录不证明未执行。此规则不清理进程效果，见 [启动回执回收](LAUNCH_RECEIPT_RETENTION.md)。
 
 ## 4. 补齐两个原先未命名的控制入口
 

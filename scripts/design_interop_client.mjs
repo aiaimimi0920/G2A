@@ -4,6 +4,8 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { createHash } from 'node:crypto';
 import { canonical, decode, digest } from '../docs/protocol/codec_peer.mjs';
+import { runEpochBindingCases } from '../docs/protocol/epoch_binding_peer.mjs';
+import { runFanoutCases } from '../docs/protocol/revoke_fanout_peer.mjs';
 
 const child = spawn(process.argv[2], [process.argv[3], '--serve'], { stdio: ['pipe', 'pipe', 'pipe'] });
 let stderr = '';
@@ -584,11 +586,13 @@ try {
   assert.equal((await wire(badAssets.join, badAssets.invitation.invitation_credential)).result.status, 'completed_without_secret');
 
   // 启动许可使用独立可信交互夹具；wire 只能引用登记 ID，不能提交程序路径或命令。
-  async function bootLaunch(outcome = null) {
+  async function bootLaunch(outcome = null, shortRetention = false) {
     const registration = await command({ kind: 'launch_start', outcome });
     const ld = (await wire(request('describe', { instance }, 'l-describe'), 'player-fixture')).result;
     const lo = (await wire(request('offer.create', { entry: 'game', descriptor_id: ld.descriptor_id, expected_descriptor_revision: ld.revision,
-      requested: { ...requested, supported_features: ld.supported_features, limits: ld.limits, ledger_durability: 'volatile' } }, 'l-offer'), 'player-fixture')).result;
+      requested: { ...requested, supported_features: ld.supported_features,
+        limits: shortRetention ? { ...ld.limits, receipt_retention_ms: 100, resume_window_ms: 0 } : ld.limits,
+        ...(shortRetention ? { maximum_grant_duration_ms: 100 } : {}), ledger_durability: 'volatile' } }, 'l-offer'), 'player-fixture')).result;
     assert.equal(lo.launch_required, true);
     assert.equal(lo.scope_digest, digest('scope', lo.immutable_scope));
     const launchDecision = { ...decision, offer_id: lo.offer_id, scope_digest: lo.scope_digest, decision_ref: 'l-approve', launch_permission: true };
@@ -950,7 +954,13 @@ try {
   assert.equal((await command({ kind: 'relay_credential', mailbox_id: rMailbox, recipient: 'relay-agent-identity', now: rNow })).fixture_rejected, 'request_gone');
   assert.equal((await command({ kind: 'relay_compact', now: rNow, fault: 'before_commit' })).fixture_fault, 'before_commit');
   assert.equal((await command({ kind: 'relay_compact', now: rNow, fault: 'after_commit' })).fixture_fault, 'after_commit');
+  assert.equal((await command({ kind: 'game_journal_retire', mailbox_id: rMailbox, now: rNow, fault: 'before_commit' })).fixture_fault, 'before_commit');
+  assert.equal((await command({ kind: 'game_journal_retire', mailbox_id: rMailbox, now: rNow, fault: 'after_commit' })).fixture_fault, 'after_commit');
+  assert.equal((await command({ kind: 'game_journal_compact', fault: 'before_commit' })).fixture_fault, 'before_commit');
+  assert.equal((await command({ kind: 'game_journal_compact', fault: 'after_commit' })).fixture_fault, 'after_commit');
   await command({ kind: 'relay_restart', now: rNow });
+  assert.deepEqual(await command({ kind: 'game_journal_compact' }), { removed: 0, remaining: 0 });
+  assert.deepEqual(await command({ kind: 'game_journal_retire', mailbox_id: rMailbox, now: rNow }), { retired: true, compacted: 0 });
   assert.deepEqual(await command({ kind: 'relay_compact', now: rNow }), { compacted: 0, remaining: 0 });
   assert.equal((await wire(rRevoke, 'relay-player-identity', { now: rNow })).result.route_revision, 2);
   assert.equal((await wire(request('relay.call', rHoldClaimed, 'r-compacted-claimed'), 'relay-agent-identity', { now: rNow })).error.outcome, 'unknown');
@@ -978,7 +988,319 @@ try {
     expected_route_revision: 1 }, 'gr-revoke'), 'relay-player-identity')).error.code, 'approval_stale');
   assert.equal((await wire(request('relay.revoke', { mailbox_id: grBox.mailbox_id,
     expected_route_revision: 2 }, 'gr-revoke'), 'relay-player-identity')).result.route_revision, 2);
-  console.log(JSON.stringify({ passed: true, node: process.version, codec_cases: codecCases,
+  // 现有 Relay 的固定代次扩展入口；不同于上面的独立候选绑定端口。
+  const profileStart = await command({ kind: 'relay_start', epoch_profile: 0 });
+  const profileExtensions = profileStart.epoch_extensions;
+  assert.deepEqual(profileExtensions, { 'g2a.relay-epoch': { version: '1', required: true,
+    value: { profile: 'g2a-relay-epoch-1', epoch: 0, instance,
+      relay_identity: principal('relay', 'service'), relay_origin: 'https://relay.fixture.invalid' } } });
+  const profileBefore = wireCalls;
+  const profileWire = (operation, payload, credential, id, extensions = profileExtensions) =>
+    wire({ ...request(operation, payload, id), extensions }, credential);
+  assert.equal((await profileWire('relay.register', rRegistration.payload, 'relay-player-identity', 'profile-register', {})).error.code, 'feature_unsupported');
+  const profileBox = (await profileWire('relay.register', rRegistration.payload, 'relay-player-identity', 'profile-register')).result;
+  assert.equal(profileBox.mailbox_id, 'mailbox-e0-1');
+  const profileTokens = {};
+  for (const role of ['agent', 'game']) profileTokens[role] = (await command({ kind: 'relay_credential',
+    mailbox_id: profileBox.mailbox_id, recipient: `relay-${role}-identity` })).credential;
+  const profileCall = { mailbox_id: profileBox.mailbox_id, call: { relay_request_id: 'profile-call',
+    operation_request: request('describe', { instance }, 'profile-inner'), inner_auth_proof: 'inner-agent-fixture',
+    deadline: 20000, route_revision: 1 } };
+  const staleProfile = structuredClone(profileExtensions); staleProfile['g2a.relay-epoch'].value.epoch = 1;
+  assert.equal((await profileWire('relay.call', profileCall, profileTokens.agent, 'profile-call', staleProfile)).error.code, 'approval_stale');
+  assert.equal((await profileWire('relay.call', profileCall, profileTokens.agent, 'profile-call')).result.state, 'queued');
+  const profileClaim = (await profileWire('relay.pull', { mailbox_id: profileBox.mailbox_id, pull_nonce: 'profile-pull',
+    maximum_items: 1 }, profileTokens.game, 'profile-pull')).result.claims[0];
+  const profileDispatch = await command({ kind: 'relay_dispatch', raw: canonical(profileClaim).toString('base64'), credential: profileTokens.game });
+  const profileReply = plain(decode(Buffer.from(profileDispatch.reply, 'base64')));
+  assert.equal((await profileWire('relay.reply', { mailbox_id: profileBox.mailbox_id,
+    claim_id: profileClaim.claim_id, reply: profileReply }, profileTokens.game, 'profile-reply')).result.status, 'accepted');
+  await command({ kind: 'relay_restart' });
+  assert.deepEqual((await profileWire('relay.call', profileCall, profileTokens.agent, 'profile-call')).result.reply, profileReply);
+  const profileRevoke = { mailbox_id: profileBox.mailbox_id, expected_route_revision: 1 };
+  assert.equal((await profileWire('relay.revoke', profileRevoke, 'relay-player-identity', 'profile-revoke', {})).error.code, 'feature_unsupported');
+  assert.equal((await profileWire('relay.revoke', profileRevoke, 'relay-player-identity', 'profile-revoke')).result.state, 'closed');
+  const relayEpochProfile = { passed: true, epoch: 0, wire_calls: wireCalls - profileBefore };
+  const rotationStart = await command({ kind: 'relay_start', epoch_profile: 0, rotating: true });
+  const oldRotationExtensions = rotationStart.epoch_extensions;
+  const rotationBefore = wireCalls;
+  const rotatedOld = (await profileWire('relay.register', rRegistration.payload, 'relay-player-identity', 'rotation-register', oldRotationExtensions)).result;
+  const rotationAgent = (await command({ kind: 'relay_credential', mailbox_id: rotatedOld.mailbox_id, recipient: 'relay-agent-identity' })).credential;
+  const rotationCall = { ...structuredClone(profileCall), mailbox_id: rotatedOld.mailbox_id };
+  assert.equal((await profileWire('relay.call', rotationCall, rotationAgent, 'rotation-call', oldRotationExtensions)).result.state, 'queued');
+  assert.equal((await profileWire('relay.revoke', { mailbox_id: rotatedOld.mailbox_id, expected_route_revision: 1 },
+    'relay-player-identity', 'rotation-close', oldRotationExtensions)).result.state, 'closed');
+  assert.equal((await command({ kind: 'relay_epoch_seal', epoch: 0 })).target_epoch, 1);
+  assert.equal((await command({ kind: 'relay_epoch_game', epoch: 1, fault: 'after_commit' })).fixture_fault, 'after_commit');
+  await command({ kind: 'relay_restart' });
+  assert.equal((await command({ kind: 'relay_epoch_game', epoch: 1 })).epoch, 1);
+  assert.equal((await command({ kind: 'relay_epoch_commit', epoch: 1, fault: 'before_commit' })).fixture_fault, 'before_commit');
+  assert.equal((await command({ kind: 'relay_epoch_commit', epoch: 1, fault: 'after_commit' })).fixture_fault, 'after_commit');
+  await command({ kind: 'relay_restart' });
+  assert.equal((await command({ kind: 'relay_epoch_commit', epoch: 1 })).epoch, 1);
+  assert.deepEqual((await profileWire('relay.register', rRegistration.payload, 'relay-player-identity', 'rotation-register', oldRotationExtensions)).result, rotatedOld);
+  const archivedQueued = await profileWire('relay.call', rotationCall, 'relay-agent-identity', 'rotation-old-read', oldRotationExtensions);
+  assert.equal(archivedQueued.error.code, 'relay_not_dispatched'); assert.equal(archivedQueued.error.outcome, 'not_accepted');
+  const currentRotationExtensions = (await command({ kind: 'relay_epoch_pairing', epoch: 1, proof_ref: 'rotation-new-proof' })).epoch_extensions;
+  assert.equal((await profileWire('relay.register', rRegistration.payload, 'relay-player-identity', 'rotation-old-proof', currentRotationExtensions)).error.code, 'permission_denied');
+  const freshRotationRegistration = { ...rRegistration.payload, pairing_proof_ref: 'rotation-new-proof' };
+  const newRotationBox = (await profileWire('relay.register', freshRotationRegistration, 'relay-player-identity', 'rotation-new-register', currentRotationExtensions)).result;
+  assert.equal(newRotationBox.mailbox_id, 'mailbox-e1-1');
+  const rotationTokens = {};
+  for (const role of ['agent', 'game']) rotationTokens[role] = (await command({ kind: 'relay_credential',
+    mailbox_id: newRotationBox.mailbox_id, recipient: `relay-${role}-identity` })).credential;
+  const newRotationCall = { ...structuredClone(profileCall), mailbox_id: newRotationBox.mailbox_id };
+  assert.equal((await profileWire('relay.call', newRotationCall, rotationTokens.agent, 'rotation-new-call', currentRotationExtensions)).result.state, 'queued');
+  const newRotationClaim = (await profileWire('relay.pull', { mailbox_id: newRotationBox.mailbox_id, pull_nonce: 'rotation-pull', maximum_items: 1 },
+    rotationTokens.game, 'rotation-pull', currentRotationExtensions)).result.claims[0];
+  const newRotationDispatch = await command({ kind: 'relay_dispatch', raw: canonical(newRotationClaim).toString('base64'), credential: rotationTokens.game });
+  const newRotationReply = plain(decode(Buffer.from(newRotationDispatch.reply, 'base64')));
+  assert.equal((await profileWire('relay.reply', { mailbox_id: newRotationBox.mailbox_id, claim_id: newRotationClaim.claim_id, reply: newRotationReply },
+    rotationTokens.game, 'rotation-reply', currentRotationExtensions)).result.status, 'accepted');
+  assert.deepEqual((await profileWire('relay.call', newRotationCall, rotationTokens.agent, 'rotation-new-call', currentRotationExtensions)).result.reply, newRotationReply);
+  const expiredRotationRead = { ...request('relay.call', rotationCall, 'rotation-expired-read'), extensions: oldRotationExtensions };
+  assert.equal((await wire(expiredRotationRead, 'relay-agent-identity', { now: 61000 })).error.code, 'request_gone');
+  assert.equal((await command({ kind: 'relay_archive_compact', now: 61000 })).removed, 1);
+  assert.equal((await wire(expiredRotationRead, 'relay-agent-identity', { now: 61000 })).error.code, 'permission_denied');
+  const relayRotation = { passed: true, epoch: 1, archive_removed: 1, wire_calls: wireCalls - rotationBefore };
+  const settlementBefore = wireCalls;
+  const settlementModes = ['unstarted', 'admission', 'action', 'control'];
+  for (const mode of settlementModes) {
+    const ext = (await command({ kind: 'relay_start', epoch_profile: 0, rotating: true })).epoch_extensions;
+    const box = (await profileWire('relay.register', rRegistration.payload, 'relay-player-identity', `settle-${mode}-register`, ext)).result;
+    const tokens = {};
+    for (const role of ['agent', 'game']) tokens[role] = (await command({ kind: 'relay_credential', mailbox_id: box.mailbox_id,
+      recipient: `relay-${role}-identity` })).credential;
+    let inner = request('describe', { instance }, 'settle-transport'), proof = 'inner-agent-fixture';
+    const offerRequest = request('offer.create', { entry: 'companion', descriptor_id: rD.descriptor_id,
+      expected_descriptor_revision: rD.revision, requested: rRequested }, 'settle-offer');
+    if (mode === 'admission') inner = offerRequest;
+    if (mode === 'action' || mode === 'control') {
+      const offer = (await wire(offerRequest, 'agent-identity')).result;
+      const approve = { ...decision, offer_id: offer.offer_id, scope_digest: offer.scope_digest, decision_ref: 'settle-approve' };
+      await command({ kind: 'admission_decision', payload: approve });
+      await wire(request('offer.decide', approve, 'settle-approve'), 'player-fixture');
+      const invite = (await wire(request('invitation.redeem', { offer_id: offer.offer_id,
+        join_intent: { scope_digest: offer.scope_digest } }, 'settle-redeem'), 'agent-identity')).result;
+      const join = request('session.join', { invitation_id: invite.invitation_id, join_intent: invite.join_intent }, 'settle-join');
+      await wire(join, invite.invitation_credential);
+      await command({ kind: 'admission_finish' });
+      const ready = (await wire(join, invite.invitation_credential)).result;
+      proof = 'settle-control';
+      await command({ kind: 'relay_inner_proof', proof_ref: proof, credential: ready.control_credential });
+      inner = mode === 'control' ? request('session.heartbeat', { session_id: ready.session.session_id }, 'settle-transport') :
+        request('action.request', { version: 'fixture-only', session_id: ready.session.session_id, id: 'settle-envelope',
+          type: 'action.request', sender: agent, audience: [player], expected_capabilities_revision: ready.session.capabilities_revision,
+          extensions: {}, payload: { action: 'find-key', arguments: { room: 'hall' }, deadline: 10000 } }, 'settle-transport');
+    }
+    const call = { mailbox_id: box.mailbox_id, call: { relay_request_id: 'settle-call', operation_request: inner,
+      inner_auth_proof: proof, deadline: 20000, route_revision: 1 } };
+    assert.equal((await profileWire('relay.call', call, tokens.agent, 'settle-call', ext)).result.state, 'queued');
+    const claim = (await profileWire('relay.pull', { mailbox_id: box.mailbox_id, pull_nonce: 'settle-pull', maximum_items: 1 },
+      tokens.game, 'settle-pull', ext)).result.claims[0];
+    const raw = canonical(claim).toString('base64');
+    const dispatchFault = mode === 'unstarted' ? 'after_mark' : 'after_game';
+    assert.equal((await command({ kind: 'relay_dispatch', raw, credential: tokens.game, fault: dispatchFault })).fixture_fault, dispatchFault);
+    await profileWire('relay.revoke', { mailbox_id: box.mailbox_id, expected_route_revision: 1 }, 'relay-player-identity', 'settle-close', ext);
+    await command({ kind: 'game_journal_retire', mailbox_id: box.mailbox_id });
+    await command({ kind: 'game_journal_compact' });
+    await command({ kind: 'relay_epoch_seal', epoch: 0 });
+    assert.equal((await command({ kind: 'relay_epoch_game', epoch: 1 })).fixture_rejected, 'outcome_unknown');
+    const settle = { kind: 'relay_settle', mode, raw, reader_proof: 'inner-agent-fixture' };
+    const changedClaim = structuredClone(claim);
+    changedClaim.call.operation_request.request_id = 'forged-settlement';
+    assert.equal((await command({ ...settle, raw: canonical(changedClaim).toString('base64') })).fixture_rejected, 'permission_denied');
+    assert.equal((await command({ ...settle, fault: 'before_commit' })).fixture_fault, 'before_commit');
+    assert.equal((await command({ kind: 'relay_epoch_game', epoch: 1 })).fixture_rejected, 'outcome_unknown');
+    assert.equal((await command({ ...settle, fault: 'after_commit' })).fixture_fault, 'after_commit');
+    await command({ kind: 'relay_restart' });
+    assert.deepEqual(await command(settle), mode === 'unstarted' ? { settled: true, outcome: 'not_accepted' } :
+      { settled: true, acceptance: 'committed' });
+    assert.equal((await command({ kind: 'relay_epoch_game', epoch: 1 })).epoch, 1);
+    assert.equal((await command({ kind: 'relay_epoch_commit', epoch: 1 })).epoch, 1);
+  }
+  const relaySettlement = { passed: true, modes: settlementModes, settled: 4, wire_calls: wireCalls - settlementBefore };
+  const launchRevokeBefore = wireCalls;
+  for (const phase of ['after_accept', 'after_effect']) {
+    const flow = await bootLaunch();
+    assert.equal((await wire(flow.launch, 'player-fixture', { fault: phase })).fixture_fault, phase);
+    const revoke = request('permission.revoke', { object_type: 'launch_permission',
+      object_id: flow.launch.payload.launch_permission_ref, expected_revision: 1 }, 'revoke-launch-permit');
+    assert.equal((await wire(revoke, 'player-fixture', { fault: 'after_commit' })).fixture_fault, 'after_commit');
+    await command({ kind: 'control_restart' });
+    const revoked = (await wire(revoke, 'player-fixture')).result;
+    assert.equal(revoked.state, 'revoked'); assert.equal(revoked.revision, 2);
+    assert.deepEqual((await wire(request('operation.get', { operation: 'permission.revoke',
+      original_request_id: revoke.request_id }, 'revoke-launch-status'), 'player-fixture')).result.revocation, revoked);
+    const retried = await wire(flow.launch, 'player-fixture');
+    if (phase === 'after_accept') assert.equal(retried.error.outcome, 'accepted');
+    else assert.deepEqual(retried.result, { status: 'started' });
+    assert.deepEqual(await command({ kind: 'launch_observe' }), { start_calls: phase === 'after_accept' ? 0 : 1,
+      effects: phase === 'after_accept' ? 0 : 1, has_session: false, grants: { 'grant-1': 'active' } });
+  }
+  const launchRevocation = { passed: true, phases: 2, wire_calls: wireCalls - launchRevokeBefore };
+  const installedBefore = wireCalls;
+  const installedObservation = (await command({ kind: 'preinstalled_start' })).observation;
+  const installedDescriptor = (await wire(request('describe', { instance }, 'installed-describe'), 'agent-identity')).result;
+  const installedAvatar = { kind: 'preinstalled', asset_id: 'builtin-fox', revision: 1, format: 'fixture-installed-1' };
+  const installedOfferReply = await wire(request('offer.create', { entry: 'companion', descriptor_id: installedDescriptor.descriptor_id,
+    expected_descriptor_revision: installedDescriptor.revision, requested: { ...requested,
+      supported_features: installedDescriptor.supported_features, action_ids: [], limits: installedDescriptor.limits, ledger_durability: 'durable',
+      forced_avatar: installedAvatar, presentation_terms: { mode: 'hide_desktop', device_id: 'device-a' } } },
+    'installed-offer'), 'agent-identity');
+  assert.ok(installedOfferReply.result, JSON.stringify(installedOfferReply));
+  const installedOffer = installedOfferReply.result;
+  assert.deepEqual(installedOffer.immutable_scope.avatar_selection, installedAvatar);
+  assert.equal(installedOffer.immutable_scope.features.includes('assets'), false);
+  assert.equal('resource_policy' in installedOffer.immutable_scope, false);
+  const installedDecision = { ...decision, offer_id: installedOffer.offer_id,
+    scope_digest: installedOffer.scope_digest, decision_ref: 'installed-approve' };
+  await command({ kind: 'admission_decision', payload: installedDecision });
+  await wire(request('offer.decide', installedDecision, 'installed-approve'), 'player-fixture');
+  const installedInvite = (await wire(request('invitation.redeem', { offer_id: installedOffer.offer_id,
+    join_intent: { scope_digest: installedOffer.scope_digest, selected_device: 'device-a',
+      presentation_observation: installedObservation } }, 'installed-redeem'), 'agent-identity')).result;
+  const installedJoin = request('session.join', { invitation_id: installedInvite.invitation_id,
+    join_intent: installedInvite.join_intent }, 'installed-join');
+  assert.equal((await wire(installedJoin, installedInvite.invitation_credential)).result.status, 'join_pending');
+  const installedAcquire = request('presentation.acquire', { session_id: 's1', generation: 1, device_id: 'device-a',
+    terms: { mode: 'hide_desktop', device_id: 'device-a' }, scope_digest: installedOffer.scope_digest,
+    ...await command({ kind: 'presentation_proof', job_id: 'admission-s1' }) }, 'admission-s1');
+  assert.equal((await wire(installedAcquire, 'presentation-fixture')).error.code, 'avatar_incompatible');
+  const installedRegistration = { kind: 'preinstalled_register', avatar: installedAvatar, device_id: 'device-b', content_digest: 'a'.repeat(64) };
+  assert.equal((await command(installedRegistration)).registered, true);
+  assert.equal((await wire(installedAcquire, 'presentation-fixture')).error.code, 'avatar_incompatible');
+  assert.equal((await command({ ...installedRegistration, device_id: 'device-a', content_digest: 'b'.repeat(64) })).fixture_rejected, 'id_conflict');
+  assert.equal((await command({ ...installedRegistration, device_id: 'device-a' })).registered, true);
+  assert.equal((await wire(installedAcquire, 'presentation-fixture', { fault: 'after_commit' })).fixture_fault, 'after_commit');
+  await command({ kind: 'control_restart' });
+  assert.equal((await wire(installedAcquire, 'presentation-fixture')).result.applied, true);
+  assert.equal((await command({ kind: 'admission_finish' })).session.ready, true);
+  const installedJoined = (await wire(installedJoin, installedInvite.invitation_credential)).result;
+  assert.equal(installedJoined.status, 'completed_without_secret');
+  assert.equal('control_credential' in installedJoined, false);
+  assert.equal((await wire(request('asset.resolve', { session_id: 's1', manifest: rootAsset.manifest,
+    scope_digest: installedOffer.scope_digest }, 'installed-no-download'), 'resource-fixture')).error.code, 'feature_unsupported');
+  const installedObserved = await command({ kind: 'asset_observe' });
+  assert.deepEqual(installedObserved, { cache_count: 0, fetch_hops: 0, parse_calls: 0, session_state: 'active' });
+  assert.equal((await command({ kind: 'presentation_observe', device_id: 'device-a' })).render_calls, 1);
+  const preinstalled = { passed: true, ready: true, fetch_hops: installedObserved.fetch_hops,
+    parse_calls: installedObserved.parse_calls, render_calls: 1, wire_calls: wireCalls - installedBefore };
+  // 独立退出事实与 authority 关闭提交分离；夹具调度不是新增 wire 操作。
+  const monitorBefore = wireCalls;
+  let monitorClosed = 0, monitorStarts = 0;
+  const monitorFaults = ['before_commit', 'after_commit'];
+  for (const fault of monitorFaults) {
+    const launched = await bootLaunch();
+    assert.equal((await wire(launched.launch, 'player-fixture')).result.status, 'started');
+    const invitation = (await wire(launched.invite, 'agent-identity')).result;
+    const join = request('session.join', { invitation_id: invitation.invitation_id,
+      join_intent: invitation.join_intent }, 'monitor-join');
+    assert.equal((await wire(join, invitation.invitation_credential)).result.status, 'join_pending');
+    assert.equal((await command({ kind: 'admission_finish' })).session.ready, true);
+    assert.equal((await wire(join, invitation.invitation_credential)).result.status, 'ready');
+    assert.deepEqual(await command({ kind: 'launch_reconcile' }), { process_state: 'running', session_state: 'active' });
+    assert.equal((await command({ kind: 'launch_record_exit' })).recorded, true);
+    assert.deepEqual(await command({ kind: 'launch_reconcile', fault }), { fixture_fault: fault });
+    await command({ kind: 'control_restart' });
+    const restored = await command({ kind: 'launch_monitor_observe' });
+    assert.equal(restored.exit_count, 1);
+    assert.equal(restored.session_state, fault === 'before_commit' ? 'active' : 'closed');
+    assert.deepEqual(await command({ kind: 'launch_reconcile' }), { process_state: 'exited', session_state: 'closed' });
+    const closed = await command({ kind: 'launch_monitor_observe' });
+    await command({ kind: 'launch_reconcile' });
+    assert.deepEqual(await command({ kind: 'launch_monitor_observe' }), closed);
+    assert.equal((await wire(launched.poll, 'player-fixture')).result.state, 'done');
+    assert.equal((await wire(launched.launch, 'player-fixture')).result.status, 'started');
+    const oldJoin = (await wire(join, invitation.invitation_credential)).result;
+    assert.equal(oldJoin.status, 'completed_without_secret');
+    assert.equal('control_credential' in oldJoin, false);
+    const observed = await command({ kind: 'launch_observe' });
+    assert.equal(observed.start_calls, 1); assert.equal(observed.effects, 1);
+    assert.equal(observed.grants['grant-1'], 'active');
+    monitorClosed++; monitorStarts += observed.start_calls;
+  }
+  const launchMonitor = { passed: true, faults: monitorFaults, closed_sessions: monitorClosed,
+    start_calls: monitorStarts, wire_calls: wireCalls - monitorBefore };
+  const retentionBefore = wireCalls;
+  let retentionRemoved = 0, retentionStarts = 0;
+  for (const fault of ['before_commit', 'after_commit']) {
+    const launch = await bootLaunch(null, true);
+    assert.equal((await wire(launch.launch, 'player-fixture')).result.status, 'started');
+    assert.equal((await wire(launch.launch, 'player-fixture', { now: 1099 })).result.status, 'started');
+    assert.equal((await command({ kind: 'launch_compact', now: 1099 })).removed, 0);
+    assert.equal((await wire(launch.poll, 'player-fixture', { now: 1099 })).result.state, 'done');
+    assert.deepEqual(await command({ kind: 'launch_compact', now: 1100, fault }), { fixture_fault: fault });
+    await command({ kind: 'control_restart', now: 1100 });
+    const restored = await command({ kind: 'launch_retention_observe' });
+    assert.equal(restored.records, fault === 'before_commit' ? 1 : 0);
+    const gc = await command({ kind: 'launch_compact', now: 1100 });
+    assert.equal(gc.removed, fault === 'before_commit' ? 1 : 0);
+    assert.equal(gc.remaining, 0);
+    assert.equal((await wire(launch.poll, 'player-fixture', { now: 1100 })).error.code, 'permission_denied');
+    assert.equal((await wire(launch.launch, 'player-fixture', { now: 1100 })).error.code, 'request_gone');
+    const observed = await command({ kind: 'launch_retention_observe' });
+    assert.deepEqual(observed, { records: 0, consumed: 1, entries: 1, effects: 1, start_calls: 1 });
+    retentionRemoved++; retentionStarts += observed.start_calls;
+  }
+  const retainedUnknown = await bootLaunch('unknown_after_effect', true);
+  assert.equal((await wire(retainedUnknown.launch, 'player-fixture')).error.outcome, 'unknown');
+  assert.equal((await command({ kind: 'launch_compact', now: 1100 })).removed, 0);
+  assert.equal((await wire(retainedUnknown.poll, 'player-fixture', { now: 1100 })).result.state, 'pending');
+  assert.equal((await command({ kind: 'launch_verify_existing', launch_permission_ref: 'l-approve' })).verified, true);
+  assert.equal((await wire(retainedUnknown.poll, 'player-fixture', { now: 1100 })).result.state, 'done');
+  retentionRemoved += (await command({ kind: 'launch_compact', now: 1100 })).removed;
+  assert.equal((await wire(retainedUnknown.poll, 'player-fixture', { now: 1100 })).error.code, 'permission_denied');
+  assert.equal((await wire(retainedUnknown.launch, 'player-fixture', { now: 1100 })).error.code, 'request_gone');
+  const settledRetention = await command({ kind: 'launch_retention_observe' });
+  assert.deepEqual(settledRetention, { records: 0, consumed: 1, entries: 1, effects: 1, start_calls: 1 });
+  retentionStarts += settledRetention.start_calls;
+  const launchRetention = { passed: true, faults: ['before_commit', 'after_commit'], pending_preserved: true,
+    removed: retentionRemoved, start_calls: retentionStarts, wire_calls: wireCalls - retentionBefore };
+  const retirementBefore = wireCalls;
+  let retiredPorts = 0, retiredStarts = 0;
+  const retirementFaults = ['after_seal', 'after_commit'];
+  for (const fault of retirementFaults) {
+    const launch = await bootLaunch();
+    assert.equal((await wire(launch.launch, 'player-fixture')).result.status, 'started');
+    assert.equal((await command({ kind: 'launcher_retire' })).fixture_rejected, 'temporarily_unavailable');
+    const invitation = (await wire(launch.invite, 'agent-identity')).result;
+    const join = request('session.join', { invitation_id: invitation.invitation_id,
+      join_intent: invitation.join_intent }, 'retirement-join');
+    assert.equal((await wire(join, invitation.invitation_credential)).result.status, 'join_pending');
+    assert.equal((await command({ kind: 'admission_finish' })).session.ready, true);
+    assert.equal((await wire(join, invitation.invitation_credential)).result.status, 'ready');
+    assert.equal((await command({ kind: 'launch_record_exit' })).recorded, true);
+    assert.equal((await command({ kind: 'launcher_retire' })).fixture_rejected, 'permission_denied');
+    assert.equal((await command({ kind: 'launch_reconcile' })).session_state, 'closed');
+    assert.deepEqual(await command({ kind: 'launcher_retire', fault }), { fixture_fault: fault });
+    await command({ kind: 'control_restart' });
+    const restored = await command({ kind: 'launcher_retirement_observe' });
+    assert.equal(restored.sealed, true); assert.equal(restored.acknowledged, fault === 'after_commit');
+    assert.equal(restored.entries, 1); assert.equal(restored.effects, 1); assert.equal(restored.exited, 1);
+    const late = { ...launch.launch, request_id: 'retirement-late-launch' };
+    assert.equal((await wire(late, 'player-fixture')).error.code, 'temporarily_unavailable');
+    if (fault === 'after_seal') {
+      assert.equal((await command({ kind: 'launcher_compact' })).fixture_rejected, 'permission_denied');
+    }
+    assert.deepEqual(await command({ kind: 'launcher_retire' }), { sealed: true, acknowledged: true });
+    assert.deepEqual(await command({ kind: 'launcher_compact' }), { removed: 1, remaining: 0, sealed: true });
+    await command({ kind: 'control_restart' });
+    assert.deepEqual(await command({ kind: 'launcher_compact' }), { removed: 0, remaining: 0, sealed: true });
+    assert.equal((await wire(launch.poll, 'player-fixture')).result.state, 'done');
+    assert.equal((await wire(launch.launch, 'player-fixture')).result.status, 'started');
+    const oldJoin = (await wire(join, invitation.invitation_credential)).result;
+    assert.equal(oldJoin.status, 'completed_without_secret');
+    assert.equal('control_credential' in oldJoin, false);
+    const observed = await command({ kind: 'launcher_retirement_observe' });
+    assert.deepEqual(observed, { sealed: true, acknowledged: true, entries: 0, effects: 0, exited: 0, start_calls: 1 });
+    retiredPorts++; retiredStarts += observed.start_calls;
+  }
+  const launcherRetirement = { passed: true, faults: retirementFaults, late_start_blocked: true,
+    sealed_ports: retiredPorts, start_calls: retiredStarts, wire_calls: wireCalls - retirementBefore };
+  const epochBinding = await runEpochBindingCases(command);
+  const revokeFanout = await runFanoutCases(command);
+  console.log(JSON.stringify({ passed: true, revoke_fanout: revokeFanout, launcher_retirement: launcherRetirement, launch_retention: launchRetention, launch_monitor: launchMonitor, launch_revocation: launchRevocation, preinstalled, relay_settlement: relaySettlement, relay_rotation: relayRotation, relay_epoch_profile: relayEpochProfile, epoch_binding: epochBinding, node: process.version, codec_cases: codecCases,
     fixture_commands: calls, wire_calls: wireCalls, wire_operations: [...operations].sort(),
     recovered_events: page.events.length, world_effects: 2, admission_ready_events: readyPage.events.length,
     control_events: controlPage.events.length, control_change_events: controlPage.events.filter(e => e.envelope.type === 'session.control_changed').length,

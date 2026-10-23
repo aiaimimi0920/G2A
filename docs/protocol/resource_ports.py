@@ -19,7 +19,25 @@ class ResourcePorts:
         self.allowed_claims = {(checks.codec.canonical(issuer), "fixture-only")}
         self.parser_revision, self.policy_revision = "fixture-parser-1", "fixture-policy-1"
         self.parse_calls = 0
+        self.installed_catalog, self.installed_devices = {}, {}
         self.after_prepare = None  # 可信调度注入点；不是可从 wire 提交的回调。
+
+    def register_installed(self, avatar, device_id, content_digest):
+        """可信 Renderer 登记精确预装内容；同版本身份不可重绑定到其他内容。"""
+        self.C.validate_type("Avatar", avatar)
+        self.C.validate_type("Id", device_id)
+        self.C.validate_type("Digest", content_digest)
+        self.R.require(avatar["kind"] == "preinstalled", "invalid_arguments")
+        key = self.C.codec.canonical(avatar)
+        self.R.require(key not in self.installed_catalog or self.installed_catalog[key] == content_digest, "id_conflict")
+        self.R.require(key in self.installed_catalog or len(self.installed_catalog) < 128, "resource_limit")
+        self.R.require(device_id in self.installed_devices or len(self.installed_devices) < 16, "resource_limit")
+        self.installed_catalog[key] = content_digest
+        self.installed_devices.setdefault(device_id, set()).add(key)
+
+    def preinstalled_accepts(self, avatar, device_id):
+        key = self.C.codec.canonical(avatar)
+        return key in self.installed_catalog and key in self.installed_devices.get(device_id or "fixture-headless", set())
 
     def policy_key(self, policy):
         material = {"policy": policy, "revision": self.policy_revision,

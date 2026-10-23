@@ -17,11 +17,11 @@
 | 操作 | 统一入口 | 当前证据或具体缺口 |
 | --- | --- | --- |
 | describe | unified | 固定登记玩家/伙伴与实例校验；不是公开发现或真实 endpoint 身份验证 |
-| offer.create | unified | 两个入口、Scope 协商冻结、有效自动规则精确匹配后同事务批准；仅 test-enrolled，volatile 或假 durable 端口，core/actions/team/resume/handoff/presentation/avatar/assets；team 受众须固定可信登记，资源仅 fixture manifest，不支持 preinstalled |
+| offer.create | unified | 两个入口、Scope 协商冻结、有效自动规则精确匹配后同事务批准；仅 test-enrolled，volatile 或假 durable 端口，core/actions/team/resume/handoff/presentation/avatar/assets；team 受众须固定可信登记，资源支持 fixture manifest 与目标设备精确预装库存；无真实格式适配 |
 | offer.get | unified | 绑定主体读取当前状态，不续期、不含秘密；无长期清理/tombstone |
 | offer.decide | unified | 预置交互假证据到 Grant/收据/有界自动规则/独立启动许可原子提交；规则需明确期限/时长，本地规则及启动许可精确绑定注册应用/设备；remember 不授权启动 |
 | invitation.redeem | unified | JoinIntent 摘要与主体绑定、一次领取、设备观察与当前 revision 验证；本地启动 profile 还需当前进程及 fresh 同设备主体；失效不重放秘密 |
-| session.join | unified | 邀请原子消费、设备绑定、资源闭包/独立 Renderer 准备、呈现 ACK 后 ready/outbox；仅声明式 fixture 资源 |
+| session.join | unified | 邀请原子消费、设备绑定、资源闭包或目标预装库存/独立 Renderer 准备、呈现 ACK 后 ready/outbox；已知本地效果冻结精确进程绑定，新进程不可替代旧准入；仅 fixture 资源和进程 |
 | session.heartbeat | unified | 当前写凭据、幂等租约；有效存活提交同事务签发呈现 revision 意图，设备仅经独立 renew 后更新，未确认期限到期仍保守闭会 |
 | session.snapshot | unified | 同切点业务快照与当前权限；要求当前写凭据，关闭后结果另走 query |
 | session.events | unified | 页窗口/nonce/当前过滤/历史缺口；没有网络发送与撤销的跨进程原子保证 |
@@ -29,7 +29,7 @@
 | session.resume | unified | fresh 原主体/同设备、假账本和窗口、一次升代；呈现 rebind 或无呈现资源再校验，不沿用已失效 parser 收据；无真实磁盘 |
 | session.handoff | unified | 玩家精确批准+目标证明、先撤旧代；资源缓存与目标 Renderer 独立验证，旧呈现释放或本地到期后才获取目标，失败闭会 |
 | session.claim_control | unified | 原 agent+已验证目标设备、pending/ready、当前代次与传输代次秘密回放；不重复升代 |
-| operation.get | unified | 原 agent/player 的准入/控制/lease/撤权/确认及动作业务收据，保留原终态、分别报告动作结果并重验读权；呈现/资源/启动沿用原 owner；不扩管理/隐私/Relay 私有查询，无长期清理 |
+| operation.get | unified | 原 agent/player 的准入/控制/lease/撤权/确认及动作业务收据，保留原终态、分别报告动作结果并重验读权；呈现/资源/启动沿用原 owner；资源回执到期与关闭后回收已有模型，不扩管理/隐私/Relay 私有查询或全账本清理 |
 | chat.send | unified | 来源/受众/拒重/续租；不证明自然语言正文未泄密，真实发送前披露控制未实现 |
 | action.request | unified | 固定 find-key、参数/定义/确认、实际凭据、收据+outbox；仍仅一个动作槽 |
 | action.cancel | unified | 原 actor、停止后续步骤、部分效果、保留收据槽；不撤销已发生世界效果 |
@@ -39,11 +39,11 @@
 | player_chat.forward | unified | 当前 GameAuthority 与玩家席位/Scope/成员代次分别核验，private/team、按玩家去重、来源/扩展/事件事务/隐私 cutoff；不续伙伴租约；无真实输入签名或远端席位认证 |
 | capability.replace | unified | CAS、冻结定义摘要、移除/改义停止动作；新增定义不扩大旧 Scope |
 | membership.replace | unified | 预置可信证明、CAS、离开重入升代；不认证远端游戏席位证明 |
-| permission.revoke | unified | grant/session/result_read/invitation/capability/auto_rule；能力撤销仅唯一会话内已批准 action ID，共用 capabilities_revision，定义更新不能恢复撤权；规则仅所属玩家撤销、不级联旧 Grant/邀请/Session；已消费邀请如实报 consumed；relay 对象已分派到独立 Relay owner，共用专用撤销状态机；实例级多会话撤权未装配 |
+| permission.revoke | unified | grant/session/result_read/invitation/capability/auto_rule/launch_permission；能力撤销仅唯一会话内已批准 action ID，共用 capabilities_revision，定义更新不能恢复撤权；规则和启动许可仅所属玩家撤销、不级联独立 Grant/Session；启动许可撤销不终止进程；已消费邀请如实报 consumed；relay 对象分派到独立 Relay owner；实例级多会话撤权未装配 |
 | action.claim | unified | 登记 executor、唯一 ticket、事务领取；不是真实作业调度器 |
 | action.commit_result | unified | 原 ticket 的可信事实、业务值 schema、结果+outbox；停止后仍允许已知事实收敛 |
-| launch.request | unified | 单一固定本地应用/设备、独立许可与派发标记、不可回滚假进程、幂等收据/未知查询、已知失败撤未用 Grant；启动不等于 ready，无真实 OS/进程认证 |
-| asset.resolve | unified | 固定资源角色、规范字节精确绑定 Manifest/策略/解析兼容性、逐跳连接见证、实际字节摘要/大小、声明式解析、整闭包缓存与收据原子提交；无真实 HTTPS/ZIP/第三方格式 |
+| launch.request | unified | 单一固定本地应用/设备、独立许可与派发标记、不可回滚假进程、幂等收据/未知查询；普通已知启动失败撤未用 Grant，派发前许可撤销失败不级联；历史 started 不代表当前存活，精确退出监视另有可信 tick；无真实 OS/进程认证 |
+| asset.resolve | unified | 仅 manifest，固定资源角色、规范字节绑定 Manifest/策略/兼容性、逐跳连接见证、字节摘要/大小、声明式解析、整闭包缓存与收据原子提交；冻结回执期限与关闭后有界回收，不续期重执行；无真实 HTTPS/ZIP/第三方格式 |
 | presentation.acquire | unified | 精确 authority/设备/Scope/代次/期限证明、设备独立效果账本、ACK 丢失重试、tombstone；只支持固定内存设备 |
 | presentation.renew | unified | 明确 local authority 入口、递增 revision/设备 epoch、旧证明隔离、不重渲染、不续游戏租约；独立设备重启 fresh 验证，有界补偿和停止收据耗尽后本地收敛；无真实设备 |
 | presentation.release | unified | 先落本代 tombstone、只撤本代占用、按最新 baseline 重算；失败如实报告 applied/actual_visible，闭会不假装已恢复 |
@@ -72,13 +72,22 @@
    [自动规则](AUTO_RULE_PROOF.md) 已补批准/复用/独立撤销及启动隔离；其余 revoke 对象，沿用受信
    假端口而非接真实 OS/账户。停止条件是每个已声明提交点的前后故障与结果查询贯通，
    unknown/partial/pending 不被转换为虚假成功。
-   assets 已补固定 manifest profile；preinstalled 选择、更多格式/沙箱和缓存长期回收仍须单独装配。
-   launch 已补单应用假端口与 prejoin 重启/未知收敛；真实 Launcher、许可独立撤销接口、长期清理及运行中进程监视仍须另验。
+   assets 已补固定 manifest 与 [目标设备预装库存](PREINSTALLED_AVATAR_PROOF.md)，以及
+   [关闭后缓存回收](ASSET_CACHE_RETENTION_PROOF.md) 和 [回执期限/回收](ASSET_RECEIPT_RETENTION_PROOF.md)；
+   更多格式/沙箱、活跃清理、共享缓存引用和预装目录长期回收仍须另验。
+   launch 已补单应用假端口、prejoin 重启/未知收敛、[许可独立撤销](LAUNCH_PERMISSION_REVOCATION.md)
+   与 [精确进程监视](LAUNCH_PROCESS_MONITOR_PROOF.md)；监视提交前后故障及恢复已有 JS/Python 场景。
+   [启动终态回执有界回收](LAUNCH_RECEIPT_RETENTION.md) 已补，保留未知及消费屏障；
+   [独立 Launcher 最终退役](LAUNCHER_RETIREMENT_PROOF.md) 已补封存后效果/退出墓碑回收，
+   不允许重新开放旧端口。真实 Launcher、许可/offer 长期清理、新代轮换、多应用与未知长期收敛仍须另验。
    privacy 已补密封内存清单、原主体查询和 outbox cutoff；动态复制/备份、混合数据拆分、跨服务屏障及长期处理调度仍须另验。
 3. **Relay 配置与生命周期**：五项在固定配对下的 queued/claimed/replied/expired/closed、
    双角色、原 ID、秘密交付、撤销和假重启已有字节证据，本工作包已收口。长期保留/回收、
    多参与者公平性和真实缓存撤销屏障另行验证。已补 [关闭载荷清理与有界重配对](RELAY_RETENTION_PROOF.md)，
-   保留墓碑和身份槽位，不代表全账本清理或无限长期运行；不以原入口数代替这些配置。
+   保留墓碑和身份槽位；另补 [动态代次轮换](RELAY_ROTATION_PROOF.md) 与
+   [未开始派发查证](RELAY_UNSTARTED_SETTLEMENT.md)，以及准入、动作受理、会话控制的
+   [跨语言恢复链](RELAY_SETTLEMENT_INTEROP.md)。查证只确认独立已提交事实，不重执行；
+   未消解 unknown 仍阻断轮换。这不代表全账本清理或无限长期运行，不以原入口数代替这些配置。
 4. **全配置对照**：最小 core 的两种准入入口、功能拒绝和准入回滚已补 Python 字节证明，
    JS/Python 另补 companion 最小链，见 [最小 core 配置](MINIMAL_CORE_PROOF.md)。其余组合
    与角色拒绝仍须分别验证；单动作/固定时钟与有限交错不代表穷尽所有实现。

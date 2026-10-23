@@ -1,5 +1,8 @@
 # Relay 关闭邮箱载荷清理与重新配对隔离
 
+后续增量已补 [独立游戏 journal 关闭屏障与清理](GAME_JOURNAL_RETENTION_PROOF.md)。
+下文的 Relay 维护事务仍不跨越游戏 authority；两项清理分别提交、分别验证。
+
 ## 合同与范围
 
 关闭 mailbox 后，可信维护端口 `compact_closed_mailboxes(now, maximum)` 可以释放该

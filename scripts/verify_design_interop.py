@@ -30,6 +30,8 @@ def serve():
     harness = session.SessionHarness(fixtures.core_fixture(), {})
     checks, fault_type = session.C, session.S.H.InjectedFailure
     codec = session.C.codec
+    epoch_fixture = None
+    fanout_fixture = None
     while True:
         line = sys.stdin.buffer.readline(2_097_153)
         if not line:
@@ -38,7 +40,15 @@ def serve():
             raise ValueError("fixture_frame_limit")
         frame = json.loads(line)
         kind = frame["kind"]
-        if kind == "codec":
+        if kind == "epoch_binding":
+            if epoch_fixture is None:
+                epoch_fixture = load("interop_epoch_fixture", "epoch_interop_fixture.py").EpochInteropFixture()
+            output = epoch_fixture.submit(frame)
+        elif kind == "revoke_fanout":
+            if fanout_fixture is None:
+                fanout_fixture = load("interop_fanout_fixture", "revoke_fanout_interop.py").FanoutInteropFixture()
+            output = fanout_fixture.submit(frame)
+        elif kind == "codec":
             try:
                 value = codec.decode(base64.b64decode(frame["raw"], validate=True))
                 output = {"canonical": codec.canonical(value).hex(), "digest": codec.digest("message", value)}
@@ -155,6 +165,21 @@ def serve():
             device = harness.devices[frame["device_id"]]
             output = {"actual_visible": device.actual_visible, "render_calls": device.render_calls,
                       "occupation_count": len(device.occupations)}
+        elif kind == "preinstalled_start":
+            assets = load("interop_preinstalled", "asset_harness.py")
+            fixture = fixtures.core_fixture(["core.session", "core.events", "resume", "handoff", "presentation", "avatar"])
+            fixture["descriptor"]["avatar_requirements"] = {"accepted_formats": ["fixture-installed-1"]}
+            harness = assets.AssetHarness(fixture)
+            observation = harness.enroll_device("device-a")
+            harness.identities["agent-identity"]["device_id"] = "device-a"
+            checks, fault_type = assets.C, assets.U.S.H.InjectedFailure
+            output = {"observation": observation}
+        elif kind == "preinstalled_register":
+            try:
+                harness.resources.register_installed(frame["avatar"], frame["device_id"], frame["content_digest"])
+                output = {"registered": True}
+            except checks.ContractError as error:
+                output = {"fixture_rejected": error.code}
         elif kind == "asset_start":
             assets = load("interop_assets", "asset_harness.py")
             fixture = fixtures.core_fixture(["core.session", "core.events", "actions", "resume", "handoff", "presentation", "avatar", "assets"])
@@ -185,6 +210,45 @@ def serve():
                       "grants": {key: value["state"] for key, value in harness.state["grants"].items()}}
         elif kind == "launch_verify_existing":
             output = {"verified": harness.launcher.verify_existing_effect(frame["launch_permission_ref"])}
+        elif kind == "launch_record_exit":
+            # 可信观察夹具只取已冻结的原进程，不接受 wire 自报退出身份。
+            process_ref = harness.state["admission_process"]["process_ref"]
+            harness.launcher.record_exit(process_ref)
+            output = {"recorded": process_ref in harness.launcher.exited}
+        elif kind == "launch_compact":
+            try:
+                output = harness.compact_launch_receipts(now=frame["now"], maximum=frame.get("maximum", 64),
+                                                        fault=frame.get("fault"))
+            except fault_type:
+                output = {"fixture_fault": frame["fault"]}
+        elif kind == "launch_retention_observe":
+            output = {"records": len(harness.state["launch_records"]),
+                      "consumed": sum(p["request_id"] is not None for p in harness.state["launch_permits"].values()),
+                      "entries": len(harness.launcher.entries), "effects": len(harness.launcher.effects),
+                      "start_calls": harness.launcher.start_calls}
+        elif kind in {"launcher_retire", "launcher_compact"}:
+            try:
+                if kind == "launcher_retire":
+                    output = harness.retire_launcher(now=frame.get("now", 1000), fault=frame.get("fault"))
+                else:
+                    output = harness.compact_retired_launcher(now=frame.get("now", 1000), maximum=frame.get("maximum", 64))
+            except fault_type:
+                output = {"fixture_fault": frame["fault"]}
+            except checks.ContractError as error:
+                output = {"fixture_rejected": error.code}
+        elif kind == "launcher_retirement_observe":
+            output = {"sealed": harness.launcher.sealed, "acknowledged": harness.state["launcher_retired"],
+                      "entries": len(harness.launcher.entries), "effects": len(harness.launcher.effects),
+                      "exited": len(harness.launcher.exited), "start_calls": harness.launcher.start_calls}
+        elif kind == "launch_monitor_observe":
+            output = {"session_state": harness.session.state["session"]["state"],
+                      "sequence": harness.session.state["session"]["sequence"],
+                      "exit_count": len(harness.launcher.exited)}
+        elif kind == "launch_reconcile":
+            try:
+                output = harness.reconcile_application(now=frame.get("now", 1000), fault=frame.get("fault"))
+            except fault_type:
+                output = {"fixture_fault": frame["fault"]}
         elif kind in {"privacy_start", "forward_start"}:
             privacy = load("interop_privacy", "privacy_harness.py")
             importer_module = load("interop_privacy_import", "source_import.py")
@@ -241,10 +305,33 @@ def serve():
                       "receipts": len(authority.state["receipts"]), "lease_deadline": authority.state["session"]["lease_deadline"]}
         elif kind == "relay_start":
             relay = load("interop_relay", "relay_harness.py")
-            harness = relay.RelayHarness(fixtures.relay_fixture())
+            harness_type = relay.RelayHarness
+            if frame.get("rotating") is True:
+                rotation = load("interop_relay_rotation", "relay_rotation.py")
+                relay, harness_type = rotation.H, rotation.RotatingRelayHarness
+            relay_fixture = fixtures.relay_fixture()
+            if "epoch_profile" in frame:
+                relay_fixture["relay_epoch_profile"] = frame["epoch_profile"]
+                relay_fixture["relay_pairing_epochs"] = {"pairing-fixture": frame["epoch_profile"]}
+            harness = harness_type(relay_fixture)
             harness.game.launcher.running = {"binding": harness.game.launcher.binding(), "verified": True}
             checks, fault_type = relay.C, relay.InjectedFailure
-            output = {"started_relay_authority": True}
+            output = {"started_relay_authority": True, "epoch_extensions": harness.epoch_extensions}
+        elif kind in ("relay_epoch_seal", "relay_epoch_game", "relay_epoch_commit", "relay_archive_compact"):
+            method = {"relay_epoch_seal": "seal_epoch", "relay_epoch_game": "advance_game_epoch",
+                      "relay_epoch_commit": "advance_relay_epoch", "relay_archive_compact": "compact_archives"}[kind]
+            try:
+                args = [] if kind == "relay_archive_compact" else [frame["epoch"]]
+                output = getattr(harness, method)(*args, now=frame.get("now", 1000), fault=frame.get("fault"))
+            except fault_type:
+                output = {"fixture_fault": frame["fault"]}
+            except checks.ContractError as error:
+                output = {"fixture_rejected": error.code}
+        elif kind == "relay_epoch_pairing":
+            proof = fixtures.relay_fixture()["relay_pairings"]["pairing-fixture"]
+            proof.update(proof_ref=frame["proof_ref"], consent_evidence_ref="fresh-" + frame["proof_ref"])
+            harness.enroll_epoch_pairing(proof, frame["epoch"])
+            output = {"enrolled": True, "epoch_extensions": harness.epoch_extensions}
         elif kind == "relay_credential":
             try:
                 token = harness.credential_for(frame["mailbox_id"], frame["recipient"], now=frame.get("now", 1000))
@@ -259,6 +346,48 @@ def serve():
                 reply = harness.dispatch_claim(base64.b64decode(frame["raw"], validate=True), frame["credential"],
                                                now=frame.get("now", 1000), fault=frame.get("fault"))
                 output = {"reply": base64.b64encode(reply).decode("ascii")}
+            except fault_type:
+                output = {"fixture_fault": frame["fault"]}
+            except checks.ContractError as error:
+                output = {"fixture_rejected": error.code}
+        elif kind == "relay_settle":
+            try:
+                claim = checks.codec.decode(base64.b64decode(frame["raw"], validate=True))
+                checks.validate_type("RelayClaim", claim)
+                box = harness.state["mailboxes"].get(claim["mailbox_id"])
+                if box is None or claim["claim_id"] not in box["claims"]:
+                    raise checks.ContractError("permission_denied")
+                record = box["requests"][box["claims"][claim["claim_id"]]]
+                if checks.codec.canonical(record["claim"]) != checks.codec.canonical(claim):
+                    raise checks.ContractError("permission_denied")
+                binding = {key: record[key] for key in ("principal", "outer_role", "inner_role")}
+                mode = frame["mode"]
+                if mode == "unstarted":
+                    output = harness.port.settle_unstarted(claim["mailbox_id"], claim["claim_id"], fault=frame.get("fault"))
+                else:
+                    methods = {"admission": "settle_admission_commit", "action": "settle_action_acceptance",
+                               "control": "settle_session_control"}
+                    if mode not in methods:
+                        raise checks.ContractError("invalid_arguments")
+                    extra = {} if mode == "admission" else {"reader_proof": frame["reader_proof"]}
+                    output = getattr(harness.port, methods[mode])(claim, binding, now=frame.get("now", 1000),
+                                                                 fault=frame.get("fault"), **extra)
+            except fault_type:
+                output = {"fixture_fault": frame["fault"]}
+            except checks.ContractError as error:
+                output = {"fixture_rejected": error.code}
+        elif kind == "game_journal_compact":
+            try:
+                output = harness.port.compact_retired_journal(maximum=frame.get("maximum", 128),
+                    fault=frame.get("fault"))
+            except fault_type:
+                output = {"fixture_fault": frame["fault"]}
+            except checks.ContractError as error:
+                output = {"fixture_rejected": error.code}
+        elif kind == "game_journal_retire":
+            try:
+                output = harness.retire_closed_game_journal(frame["mailbox_id"],
+                    now=frame.get("now", 1000), fault=frame.get("fault"))
             except fault_type:
                 output = {"fixture_fault": frame["fault"]}
             except checks.ContractError as error:
@@ -288,6 +417,82 @@ def serve():
         print(json.dumps(output, ensure_ascii=False), flush=True)
 
 
+def peer_passed(summary):
+    """候选 profile 必须实际执行，不能仅凭旧客户端的总 passed 标记放行。"""
+    if type(summary) is not dict or summary.get("passed") is not True:
+        return False
+    epoch = summary.get("epoch_binding")
+    relay = summary.get("relay_epoch_profile")
+    rotation = summary.get("relay_rotation")
+    settlement = summary.get("relay_settlement")
+    installed = summary.get("preinstalled")
+    launch_revoke = summary.get("launch_revocation")
+    monitor = summary.get("launch_monitor")
+    retention = summary.get("launch_retention")
+    retirement = summary.get("launcher_retirement")
+    fanout = summary.get("revoke_fanout")
+    catalogue = fanout.get("dynamic_catalogue") if type(fanout) is dict else None
+    return (type(epoch) is dict and epoch.get("passed") is True
+            and type(fanout) is dict and fanout.get("passed") is True
+            and fanout.get("kinds") == ["session", "grant", "result_read", "capability"]
+            and fanout.get("scope") == "candidate-coordinator-fixture"
+            and type(fanout.get("completed")) is int and fanout["completed"] == 4
+            and type(fanout.get("wire_calls")) is int and fanout["wire_calls"] >= 28
+            and type(fanout.get("fixture_calls")) is int and fanout["fixture_calls"] >= 119
+            and type(fanout.get("snapshots_rejected")) is int and fanout["snapshots_rejected"] == 8
+            and fanout.get("namespace_isolated") is True
+            and type(catalogue) is dict and catalogue.get("passed") is True
+            and catalogue.get("faults") == ["before_commit", "after_commit"]
+            and type(catalogue.get("completed")) is int and catalogue["completed"] == 2
+            and type(catalogue.get("stale_selections")) is int and catalogue["stale_selections"] == 2
+            and type(catalogue.get("unresolved_retirements")) is int and catalogue["unresolved_retirements"] == 4
+            and type(catalogue.get("retired_replays")) is int and catalogue["retired_replays"] == 2
+            and catalogue.get("multi_session") is True
+            and type(retirement) is dict and retirement.get("passed") is True
+            and retirement.get("faults") == ["after_seal", "after_commit"]
+            and retirement.get("late_start_blocked") is True
+            and type(retirement.get("wire_calls")) is int and retirement["wire_calls"] >= 22
+            and type(retirement.get("sealed_ports")) is int and retirement["sealed_ports"] == 2
+            and type(retirement.get("start_calls")) is int and retirement["start_calls"] == 2
+            and type(retention) is dict and retention.get("passed") is True
+            and retention.get("faults") == ["before_commit", "after_commit"]
+            and retention.get("pending_preserved") is True
+            and type(retention.get("wire_calls")) is int and retention["wire_calls"] >= 24
+            and type(retention.get("removed")) is int and retention["removed"] == 3
+            and type(retention.get("start_calls")) is int and retention["start_calls"] == 3
+            and type(monitor) is dict and monitor.get("passed") is True
+            and monitor.get("faults") == ["before_commit", "after_commit"]
+            and type(monitor.get("wire_calls")) is int and monitor["wire_calls"] >= 20
+            and type(monitor.get("closed_sessions")) is int and monitor["closed_sessions"] == 2
+            and type(monitor.get("start_calls")) is int and monitor["start_calls"] == 2
+            and type(launch_revoke) is dict and launch_revoke.get("passed") is True
+            and type(launch_revoke.get("phases")) is int and launch_revoke["phases"] == 2
+            and type(launch_revoke.get("wire_calls")) is int and launch_revoke["wire_calls"] >= 16
+            and type(installed) is dict and installed.get("passed") is True and installed.get("ready") is True
+            and type(installed.get("fetch_hops")) is int and installed["fetch_hops"] == 0
+            and type(installed.get("parse_calls")) is int and installed["parse_calls"] == 0
+            and type(installed.get("render_calls")) is int and installed["render_calls"] == 1
+            and type(installed.get("wire_calls")) is int and installed["wire_calls"] >= 11
+            and type(settlement) is dict and settlement.get("passed") is True
+            and settlement.get("modes") == ["unstarted", "admission", "action", "control"]
+            and type(settlement.get("settled")) is int and settlement["settled"] == 4
+            and type(settlement.get("wire_calls")) is int and settlement["wire_calls"] >= 26
+            and type(rotation) is dict and rotation.get("passed") is True
+            and type(rotation.get("epoch")) is int and rotation["epoch"] == 1
+            and type(rotation.get("archive_removed")) is int and rotation["archive_removed"] == 1
+            and type(rotation.get("wire_calls")) is int and rotation["wire_calls"] >= 13
+            and type(relay) is dict and relay.get("passed") is True
+            and type(relay.get("epoch")) is int and relay["epoch"] == 0
+            and type(relay.get("wire_calls")) is int and relay["wire_calls"] >= 9
+            and epoch.get("profile") == "g2a-epoch-binding-1"
+            and type(epoch.get("wire_calls")) is int and epoch["wire_calls"] >= 26
+            and type(epoch.get("fixture_calls")) is int and epoch["fixture_calls"] >= 51
+            and epoch.get("archived_receipt") is True
+            and type(epoch.get("relay_epoch")) is int and epoch["relay_epoch"] == 1
+            and type(epoch.get("game_epoch")) is int and epoch["game_epoch"] == 1
+            and type(epoch.get("effects")) is int and epoch["effects"] == 2)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--serve", action="store_true", help=argparse.SUPPRESS)
@@ -312,7 +517,7 @@ def main():
         summary = {"passed": False}
     paths = list((ROOT / "docs/protocol").glob("*")) + [Path(__file__).resolve(), ROOT / "scripts/design_interop_client.mjs"]
     report = {"kind": "g2a-cross-language-fixture-evidence", "created_at": datetime.now(timezone.utc).isoformat(),
-              "passed": result.returncode == 0 and summary.get("passed") is True,
+              "passed": result.returncode == 0 and peer_passed(summary),
               "python": sys.version, "peer": summary, "exit_code": result.returncode, "stderr": result.stderr,
               "source_sha256": {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths) if p.is_file()},
               "not_proven": ["independent vendor or full protocol implementation", "HTTP/TLS/real authentication",

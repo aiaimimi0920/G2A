@@ -890,5 +890,257 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(len(self.h.state["mailboxes"]), 8)
 
 
+    def journal_claim(self):
+        self.register(); self.call()
+        claim = self.pull()[0]
+        record = next(iter(self.box["requests"].values()))
+        binding = {key: deepcopy(record[key]) for key in ("principal", "outer_role", "inner_role")}
+        return claim, binding
+
+    def test_game_journal_retirement_removes_reply_without_world_rollback(self):
+        claim, binding = self.journal_claim()
+        self.dispatch(claim)
+        before = deepcopy(self.h.game.state)
+        self.revoke()
+        self.assertEqual(self.h.retire_closed_game_journal(self.mid, now=1000), {"retired": True, "compacted": 1})
+        record = self.h.port.journal[(self.mid, claim["claim_id"])]
+        self.assertIsNone(record["reply"])
+        self.assertIsNone(record["guard"])
+        self.assertIn("digest", record)
+        self.assertEqual(self.h.game.state, before)
+        self.rejected("request_gone", lambda: self.h.port.dispatch(claim, binding, now=1000))
+        self.assertEqual(self.h.port.dispatch_calls, 1)
+
+    def test_game_journal_retirement_blocks_delayed_not_yet_dispatched_claim(self):
+        claim, binding = self.journal_claim()
+        self.revoke()
+        self.assertEqual(self.h.retire_closed_game_journal(self.mid, now=1000)["compacted"], 0)
+        self.rejected("request_gone", lambda: self.h.port.dispatch(claim, binding, now=1000))
+        self.assertEqual(self.h.port.dispatch_calls, 0)
+
+    def test_game_journal_retirement_requires_closed_owner(self):
+        self.register()
+        self.rejected("permission_denied", lambda: self.h.retire_closed_game_journal(self.mid, now=1000))
+        self.rejected("permission_denied", lambda: self.h.retire_closed_game_journal("absent", now=1000))
+        self.assertEqual(self.h.port.closed_mailboxes, set())
+
+    def test_game_journal_retirement_faults_keep_authorities_independent(self):
+        claim, binding = self.journal_claim()
+        self.dispatch(claim); self.revoke()
+        before = deepcopy(self.h.port.journal)
+        with self.assertRaises(H.InjectedFailure):
+            self.h.retire_closed_game_journal(self.mid, now=1000, fault="before_commit")
+        self.assertEqual(self.h.port.journal, before)
+        self.assertEqual(self.box["state"], "closed")
+        self.assertNotIn(self.mid, self.h.port.closed_mailboxes)
+        with self.assertRaises(H.InjectedFailure):
+            self.h.retire_closed_game_journal(self.mid, now=1000, fault="after_commit")
+        self.assertEqual(self.h.retire_closed_game_journal(self.mid, now=1000), {"retired": True, "compacted": 0})
+        self.rejected("request_gone", lambda: self.h.port.dispatch(claim, binding, now=1000))
+
+    def test_game_journal_retirement_survives_both_cleanup_orders_and_restart(self):
+        for game_first in (True, False):
+            self.setUp()
+            claim, binding = self.journal_claim()
+            self.dispatch(claim); self.revoke()
+            methods = [lambda: self.h.retire_closed_game_journal(self.mid, now=1000),
+                       lambda: self.h.compact_closed_mailboxes(now=1000)]
+            for method in methods if game_first else reversed(methods):
+                method()
+            self.h = self.h.restart_from_mock_ledger(now=1000)
+            self.rejected("request_gone", lambda: self.h.port.dispatch(claim, binding, now=1000))
+            self.assertEqual(self.revoke()["result"]["route_revision"], 2)
+            self.assertEqual(self.h.port.dispatch_calls, 1)
+
+    def test_game_journal_retirement_does_not_turn_unknown_into_not_accepted(self):
+        claim, binding = self.journal_claim()
+        with self.assertRaises(H.InjectedFailure):
+            self.dispatch(claim, fault="after_mark")
+        self.revoke(); self.h.retire_closed_game_journal(self.mid, now=1000)
+        error = self.rejected("request_gone", lambda: self.call(credential="relay-agent-identity"))
+        self.assertEqual(error["outcome"], "unknown")
+        self.rejected("request_gone", lambda: self.h.port.dispatch(claim, binding, now=1000))
+
+    def test_game_journal_retirement_serializes_inflight_effect_before_erasing_reply(self):
+        self.admit()
+        payload = self.call_payload(F.wire_request("chat.send", self.chat(), "retire-chat"),
+                                    relay_id="retire-race", proof="inner-control")
+        self.call(payload)
+        claim = self.pull("retire-pull")[0]
+        entered, proceed, retiring = Event(), Event(), Event()
+        original = self.h.game.submit
+        def paused(*args, **kwargs):
+            entered.set()
+            if not proceed.wait(5):
+                raise RuntimeError("test_dispatch_gate_timeout")
+            return original(*args, **kwargs)
+        def retire():
+            retiring.set()
+            return self.h.retire_closed_game_journal(self.mid, now=1000)
+        with patch.object(self.h.game, "submit", side_effect=paused), ThreadPoolExecutor(max_workers=2) as pool:
+            dispatch = pool.submit(self.dispatch, claim)
+            try:
+                self.assertTrue(entered.wait(5))
+                self.revoke()
+                retirement = pool.submit(retire)
+                self.assertTrue(retiring.wait(5))
+            finally:
+                proceed.set()
+            self.assertIn("result", dispatch.result(timeout=5))
+            self.assertEqual(retirement.result(timeout=5)["compacted"], len(self.h.port.journal))
+        self.assertEqual(len(self.h.game.session.state["receipts"]), 1)
+        self.assertIsNone(self.h.port.journal[(self.mid, claim["claim_id"])]["reply"])
+        self.assertIn(self.mid, self.h.port.closed_mailboxes)
+
+    def test_game_journal_retirement_new_pairing_is_not_blocked(self):
+        claim, binding = self.journal_claim()
+        self.revoke(); self.h.retire_closed_game_journal(self.mid, now=1000)
+        new = self.re_pair(2)
+        self.mid = new["mailbox_id"]
+        self.tokens = {role: self.h.credential_for(self.mid, "relay-" + role + "-identity", now=1000)
+                       for role in ("player", "agent", "game")}
+        self.call()
+        self.assertIn("result", self.dispatch(self.pull()[0]))
+        self.rejected("request_gone", lambda: self.h.port.dispatch(claim, binding, now=1000))
+
+
+    def test_retired_journal_gc_keeps_barrier_after_removing_last_claim(self):
+        claim, binding = self.journal_claim()
+        self.dispatch(claim); self.revoke()
+        self.h.retire_closed_game_journal(self.mid, now=1000)
+        self.assertEqual(self.h.port.compact_retired_journal(), {"removed": 1, "remaining": 0})
+        self.assertEqual(self.h.port.journal, {})
+        self.assertIn(self.mid, self.h.port.closed_mailboxes)
+        self.rejected("request_gone", lambda: self.h.port.dispatch(claim, binding, now=1000))
+        self.assertEqual(self.h.port.dispatch_calls, 1)
+
+    def test_retired_journal_gc_does_not_use_relay_close_as_game_barrier(self):
+        claim, binding = self.journal_claim()
+        self.dispatch(claim); self.revoke()
+        before = deepcopy(self.h.port.journal)
+        self.assertEqual(self.h.port.compact_retired_journal(), {"removed": 0, "remaining": 0})
+        self.assertEqual(self.h.port.journal, before)
+
+    def test_retired_journal_gc_preserves_active_mailbox_replay(self):
+        old_claim, old_binding = self.journal_claim()
+        self.dispatch(old_claim); self.revoke()
+        self.h.retire_closed_game_journal(self.mid, now=1000)
+        new = self.re_pair(2)
+        self.mid = new["mailbox_id"]
+        self.tokens = {role: self.h.credential_for(self.mid, "relay-" + role + "-identity", now=1000)
+                       for role in ("player", "agent", "game")}
+        self.call(); claim = self.pull()[0]
+        reply = self.dispatch(claim)
+        active = deepcopy(self.h.port.journal[(self.mid, claim["claim_id"])])
+        self.assertEqual(self.h.port.compact_retired_journal()["removed"], 1)
+        self.assertEqual(self.h.port.journal[(self.mid, claim["claim_id"])], active)
+        self.assertEqual(self.dispatch(claim), reply)
+        self.assertEqual(self.h.port.dispatch_calls, 2)
+        self.rejected("request_gone", lambda: self.h.port.dispatch(old_claim, old_binding, now=1000))
+
+    def test_retired_journal_gc_bounded_batches_and_lost_response(self):
+        self.register()
+        for index in range(3):
+            self.call(self.call_payload(relay_id="gc-" + str(index)))
+            self.dispatch(self.pull("pull-gc-" + str(index))[0])
+        self.revoke(); self.h.retire_closed_game_journal(self.mid, now=1000)
+        before = deepcopy(self.h.port.journal)
+        with self.assertRaises(H.InjectedFailure):
+            self.h.port.compact_retired_journal(maximum=1, fault="before_commit")
+        self.assertEqual(self.h.port.journal, before)
+        with self.assertRaises(H.InjectedFailure):
+            self.h.port.compact_retired_journal(maximum=1, fault="after_commit")
+        self.assertEqual(len(self.h.port.journal), 2)
+        self.assertEqual(self.h.port.compact_retired_journal(maximum=1), {"removed": 1, "remaining": 1})
+        self.assertEqual(self.h.port.compact_retired_journal(), {"removed": 1, "remaining": 0})
+        self.assertEqual(self.h.port.compact_retired_journal(), {"removed": 0, "remaining": 0})
+
+    def test_retired_journal_gc_validates_bounds_and_unhealthy_port(self):
+        self.register()
+        for maximum in (True, False, 0, -1, 129, 1.5, "1"):
+            self.rejected("invalid_arguments", lambda: self.h.port.compact_retired_journal(maximum=maximum))
+        self.rejected("invalid_arguments", lambda: self.h.port.compact_retired_journal(fault="bad"))
+        self.h = self.h.restart_from_mock_ledger(now=1000, intact=False)
+        self.rejected("temporarily_unavailable", self.h.port.compact_retired_journal)
+
+    def test_retired_journal_gc_restart_keeps_unknown_and_blocks_forgotten_claim(self):
+        claim, binding = self.journal_claim()
+        with self.assertRaises(H.InjectedFailure):
+            self.dispatch(claim, fault="after_mark")
+        self.revoke(); self.h.retire_closed_game_journal(self.mid, now=1000)
+        self.h.port.compact_retired_journal()
+        self.h = self.h.restart_from_mock_ledger(now=1000)
+        self.assertEqual(self.h.port.journal, {})
+        self.rejected("request_gone", lambda: self.h.port.dispatch(claim, binding, now=1000))
+        self.assertEqual(self.rejected("request_gone", lambda: self.call(credential="relay-agent-identity"))["outcome"], "unknown")
+
+    def test_retired_journal_gc_releases_capacity_but_not_mailbox_identity(self):
+        claim, binding = self.journal_claim()
+        self.dispatch(claim); self.revoke()
+        self.h.retire_closed_game_journal(self.mid, now=1000)
+        # 容量边界夹具：填满剩余健康邮箱的 journal 摘要，不伪装业务效果。
+        for index in range(1023):
+            self.h.port.journal[("other-active", str(index))] = {"digest": "fixture", "reply": None, "guard": None}
+        new = self.re_pair(2)
+        old_mid = self.mid
+        self.mid = new["mailbox_id"]
+        self.tokens = {role: self.h.credential_for(self.mid, "relay-" + role + "-identity", now=1000)
+                       for role in ("player", "agent", "game")}
+        self.call(); new_claim = self.pull()[0]
+        self.rejected("resource_limit", lambda: self.dispatch(new_claim))
+        self.assertEqual(self.h.port.compact_retired_journal()["removed"], 1)
+        self.assertIn("result", self.dispatch(new_claim))
+        self.assertEqual(len(self.h.port.journal), 1024)
+        self.assertIn(old_mid, self.h.state["mailboxes"])
+        self.assertIn(old_mid, self.h.port.closed_mailboxes)
+
+
+    def test_retired_port_rejects_all_identity_and_disclosure_entries(self):
+        claim, binding = self.journal_claim()
+        reply = self.dispatch(claim)
+        old = self.h.port
+        self.h = self.h.restart_from_mock_ledger(now=1000)
+        before = deepcopy(old.proofs)
+        calls = [lambda: old.enroll("late-proof", "agent-identity"),
+                 lambda: old.verify("inner-agent-fixture", now=1000),
+                 lambda: old.guard(now=1000),
+                 lambda: old.response_guard(claim, reply, now=1000),
+                 lambda: old.dispatch(claim, binding, now=1000),
+                 lambda: old.retire_mailbox(self.mid), old.compact_retired_journal,
+                 old.restart]
+        for call in calls:
+            with self.subTest(entry=call):
+                self.rejected("temporarily_unavailable", call)
+        self.assertEqual(old.proofs, before)
+        self.assertEqual(self.dispatch(claim), reply)
+
+    def test_damaged_port_rejects_disclosure_even_without_journal_record(self):
+        claim, binding = self.journal_claim()
+        self.h = self.h.restart_from_mock_ledger(now=1000, intact=False)
+        port = self.h.port
+        self.assertEqual(port.journal, {})
+        for call in (lambda: port.response_guard(claim, {}, now=1000),
+                     lambda: port.guard(now=1000), lambda: port.verify("inner-agent-fixture", now=1000),
+                     lambda: port.enroll("late-proof", "agent-identity"), port.restart):
+            with self.subTest(entry=call):
+                self.rejected("temporarily_unavailable", call)
+
+    def test_port_restart_rejects_non_boolean_intact_without_retiring_original(self):
+        self.register()
+        for intact in (0, 1, None, "yes", [], {}):
+            with self.subTest(intact=intact):
+                self.rejected("invalid_arguments", lambda: self.h.port.restart(intact=intact))
+                self.assertTrue(self.h.port.healthy)
+
+    def test_unhealthy_port_blocks_relay_new_admission_and_cached_response(self):
+        claim, binding = self.journal_claim()
+        reply = self.dispatch(claim); self.reply(claim, reply)
+        self.h.port.healthy = False  # 独立端口故障，Relay 自身账本仍健康。
+        before = deepcopy(self.box)
+        self.rejected("temporarily_unavailable", self.call)
+        self.rejected("temporarily_unavailable", lambda: self.call(self.call_payload(relay_id="new")))
+        self.assertEqual(self.box, before)
+
+
 if __name__ == "__main__":
     unittest.main()

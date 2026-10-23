@@ -25,6 +25,7 @@ class RelayHarness:
     WIRE_OPERATIONS = P.PrivacyHarness.WIRE_OPERATIONS | RELAY
     MAX_WAIT_MS, MAX_INFLIGHT, MAX_RECORDS = 30000, 32, 128
     MAX_PULL_ITEMS, MAX_PULLS, MAX_MAILBOXES = 16, 128, 8
+    EPOCH_EXTENSION = "g2a.relay-epoch"
 
     def __init__(self, fixture, records=None, *, game=None):
         self.fixture = deepcopy(fixture)
@@ -34,6 +35,15 @@ class RelayHarness:
                   "negotiation_failed")
         self.instance, self.relay_identity = deepcopy(fixture["scope"]["instance"]), deepcopy(binding["relay_identity"])
         self.origin = fixture["relay_origin"]
+        self.route_epoch = fixture.get("relay_epoch_profile")
+        self.pairing_epochs = deepcopy(fixture.get("relay_pairing_epochs", {}))
+        if "relay_epoch_profile" in fixture:
+            C.validate_type("Nat", self.route_epoch)
+            R.require(type(self.pairing_epochs) is dict, "invalid_arguments")
+        self.epoch_extensions = {} if self.route_epoch is None else {self.EPOCH_EXTENSION: {
+            "version": "1", "required": True, "value": {"profile": "g2a-relay-epoch-1",
+                "epoch": self.route_epoch, "instance": deepcopy(self.instance),
+                "relay_identity": deepcopy(self.relay_identity), "relay_origin": self.origin}}}
         R.require(binding["endpoint"] == self.origin + "/g2a/operations" and binding["peer_identity"] == self.instance["game"] and
                   self.relay_identity in fixture["scope"]["privacy_model"]["visible_to"], "negotiation_failed")
         self.pairings = deepcopy(fixture["relay_pairings"])
@@ -41,7 +51,8 @@ class RelayHarness:
         self.lock = RLock()
         self.state = {"mailboxes": {}, "credentials": {}, "registrations": {}, "pairings_used": {},
                       "last_now": 0, "retired": False, "ledger_healthy": True}
-        self.port = PORT.RelayGamePort(C, R, E, InjectedFailure, self.game, fixture["relay_game_audience"])
+        self.port = PORT.RelayGamePort(C, R, E, InjectedFailure, self.game, fixture["relay_game_audience"],
+                                       route_epoch=self.route_epoch)
         self.port.enroll("inner-agent-fixture", "agent-identity")
         self.port.enroll("inner-player-fixture", "player-fixture")
 
@@ -101,8 +112,14 @@ class RelayHarness:
         identity["enrolled"] = enrolled
         return identity
 
+    def _lookup_box(self, mailbox_id):
+        return self.state["mailboxes"].get(mailbox_id)
+
+    def _selected_extensions(self, request, identity, now):
+        return self.epoch_extensions
+
     def _box(self, mailbox_id, identity):
-        box = self.state["mailboxes"].get(mailbox_id)
+        box = self._lookup_box(mailbox_id)
         R.require(box is not None, "permission_denied")
         allowed = {"relay_agent": box["registration"]["agent_principals"],
                    "relay_controller": box["registration"]["control_principals"], "relay_game": [self.instance["game"]]}
@@ -137,7 +154,7 @@ class RelayHarness:
         mailbox_id = request["payload"].get("mailbox_id")
         if request["operation"] == "permission.revoke" and request["payload"]["object_type"] == "relay":
             mailbox_id = request["payload"]["object_id"]
-        box = self.state["mailboxes"].get(mailbox_id)
+        box = self._lookup_box(mailbox_id)
         limits = self.fixture["scope"]["limits"] if box is None else box["registration"]["limits"]
         R.require(len(encoded) <= min(65536, limits["message_bytes"]), "resource_limit")
         return encoded
@@ -164,6 +181,9 @@ class RelayHarness:
             return self._reply(request, prior["result"])
         payload = request["payload"]
         pairing = self.pairings.get(payload["pairing_proof_ref"])
+        if self.route_epoch is not None:
+            approved_epoch = self.pairing_epochs.get(payload["pairing_proof_ref"])
+            R.require(type(approved_epoch) is int and approved_epoch == self.route_epoch, "permission_denied")
         try:
             C.validate_type("RelayPairingAuthorization", pairing)
         except (C.ContractError, C.codec.CodecError):
@@ -178,7 +198,8 @@ class RelayHarness:
         R.require(now < payload["registration_expiry"] <= min(pairing["expires_at"], now + 300000), "request_expired")
         R.require(payload["pairing_proof_ref"] not in self.state["pairings_used"], "id_conflict")
         R.require(len(self.state["mailboxes"]) < self.MAX_MAILBOXES, "resource_limit")
-        mailbox_id = "mailbox-" + str(len(self.state["mailboxes"]) + 1)
+        prefix = "mailbox-" if self.route_epoch is None else "mailbox-e" + str(self.route_epoch) + "-"
+        mailbox_id = prefix + str(len(self.state["mailboxes"]) + 1)
         box = {"mailbox_id": mailbox_id, "registration": deepcopy(payload), "controller": deepcopy(identity["principal"]),
             "route_revision": 1, "registration_expiry": payload["registration_expiry"], "state": "open",
             "requests": {}, "claims": {}, "pulls": {}, "controls": {}, "credentials": {}, "last_principal": None}
@@ -334,13 +355,18 @@ class RelayHarness:
             # 通用对象撤销在 owner 边界映射到同一 Relay 控制权限，不接受内层 player/game 身份。
             identity = self._identity(credential, "relay.revoke" if relay_revocation else request["operation"], now)
             R.require(request["version"] == self.fixture["scope"]["version"], "unsupported_version")
-            C.validate_active_request(raw, selected_extensions={}, supported_extensions=())
+            # profile 是受信端点预先选定的冻结配置，不从请求的 epoch 自行升级或降级。
+            # 普通可选扩展的空请求止损豁免不适用于此身份边界；撤销也必须精确携带绑定。
+            if self.route_epoch is not None:
+                R.require(self.EPOCH_EXTENSION in request["extensions"], "feature_unsupported")
+            C.validate_active_request(raw, selected_extensions=self._selected_extensions(request, identity, now),
+                supported_extensions={(self.EPOCH_EXTENSION, "1")} if self.route_epoch is not None else ())
             object_field = "object_id" if relay_revocation else "mailbox_id"
             box = None if request["operation"] == "relay.register" else self._box(request["payload"][object_field], identity)
             limit = self.fixture["scope"]["limits"]["message_bytes"] if box is None else box["registration"]["limits"]["message_bytes"]
             R.require(len(raw) <= min(limit, 65536), "resource_limit")
             def apply():
-                current = None if box is None else self.state["mailboxes"][box["mailbox_id"]]
+                current = None if box is None else self._lookup_box(box["mailbox_id"])
                 if request["operation"] == "relay.register":
                     return self._register(request, identity, now)
                 if request["operation"] == "relay.call":
@@ -394,6 +420,16 @@ class RelayHarness:
                     box["state"] == "closed" and not box.get("compacted", False)
                     for box in self.state["mailboxes"].values())}
             return self._transaction(compact, fault)
+
+    def retire_closed_game_journal(self, mailbox_id, *, now, fault=None):
+        """可信维护协调器：先确认 owner 已关闭，再独立提交游戏端口屏障。"""
+        with self.lock:
+            self._maintain(now)
+            R.require(self.state["ledger_healthy"], "temporarily_unavailable")
+            box = self.state["mailboxes"].get(mailbox_id)
+            R.require(box is not None and box["state"] == "closed", "permission_denied")
+        # 不持有 Relay 锁等待游戏派发完成，避免把两个 authority 合并成伪事务。
+        return self.port.retire_mailbox(mailbox_id, fault=fault)
 
     def restart_from_mock_ledger(self, *, now, intact=True):
         R.require(type(intact) is bool, "invalid_arguments")

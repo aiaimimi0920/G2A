@@ -274,7 +274,7 @@
       "mode": "control",
       "input": "permission_revoke_input",
       "output": "permission_revoke_output",
-      "semantic_guard": "按对象验证撤销权；relay 对象先分派到 Relay owner 并按 relay.revoke 的角色/lane 授权，不采用本项游戏入口角色；auto_rule 仅所属玩家可撤且不级联已有 Grant；game 只走管理入口；result_read 单独撤销不伪造不存在。"
+      "semantic_guard": "按对象验证撤销权；relay 对象先分派到 Relay owner 并按 relay.revoke 的角色/lane 授权，不采用本项游戏入口角色；auto_rule 仅所属玩家可撤且不级联已有 Grant；launch_permission 仅所属玩家可撤且不撤销独立 Grant 或已发生启动效果；game 只走管理入口；result_read 单独撤销不伪造不存在。"
     },
     "action.claim": {
       "roles": [

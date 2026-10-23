@@ -19,15 +19,17 @@ C, R, U, E = A.C, A.R, A.U, A.E
 
 class LaunchHarness(A.AssetHarness):
     WIRE_OPERATIONS = A.AssetHarness.WIRE_OPERATIONS | {"launch.request"}
+    PREJOIN_REVOCATIONS = A.AssetHarness.PREJOIN_REVOCATIONS | {"launch_permission"}
 
     def __init__(self, fixture, records=None, *, decisions=None, target_proofs=None):
         super().__init__(fixture, records, decisions=decisions, target_proofs=target_proofs)
         self.launcher = L.LauncherPort(C, R, fixture["player"], fixture["agent"])
         self.identities["agent-identity"]["device_id"] = self.launcher.registration["device_id"]
-        self.state.update(launch_permits={}, launch_records={})
+        self.state.update(launch_permits={}, launch_records={}, admission_process=None, launcher_retired=False)
         self.before_dispatch = self.after_effect = None  # 可信调度注入点；不由请求指定。
 
     def _create(self, payload, identity, now):
+        R.require(not self.launcher.sealed, "temporarily_unavailable")
         binding = self.launcher.binding()
         R.require(binding["player"] == self.fixture["player"] and binding["agent"] == self.fixture["agent"], "permission_denied")
         if payload["entry"] == "companion":
@@ -48,7 +50,7 @@ class LaunchHarness(A.AssetHarness):
             R.require(ref not in self.state["launch_permits"], "id_conflict")
             self.state["launch_permits"][ref] = {"offer_id": view["offer_id"], "player": deepcopy(view["immutable_scope"]["player"]),
                 "scope_digest": view["scope_digest"], "binding": deepcopy(binding), "expires_at": view["decision_deadline"],
-                "request_id": None}
+                "request_id": None, "state": "active", "revision": 1}
 
     def _automatic_context(self, record):
         # 接入许可不能跨本地应用/注册 revision/设备复用；运行状态不属于永久授权条件。
@@ -76,6 +78,9 @@ class LaunchHarness(A.AssetHarness):
             R.require(self.session.state["session"].get("controller_device") in (None, device) and
                       control.get("device_id") in (None, device), "permission_denied")
             self.session.state["session"]["controller_device"] = control["device_id"] = device
+            process_ref = self.launcher.running.get("process_ref") if self.launcher.running else None
+            if process_ref is not None and self.launcher.observe_process(process_ref, record["launch_binding"]) == "running":
+                self.state["admission_process"] = {"process_ref": process_ref, "binding": deepcopy(record["launch_binding"])}
         return invitation
 
     def _receipt_result(self, receipt, identity, now):
@@ -84,6 +89,8 @@ class LaunchHarness(A.AssetHarness):
             invitation = self.state["invitations"][receipt["ref"]]
             record = self.state["offers"][invitation["offer_id"]]
             valid = self._available_for_offer(record)
+            if receipt["kind"] == "join":
+                valid = valid and self._bound_process_available()
             if receipt["kind"] == "invitation":
                 try:
                     self._fresh(identity, now, record["launch_binding"]["device_id"])
@@ -93,15 +100,47 @@ class LaunchHarness(A.AssetHarness):
                 return {"status": "completed_without_secret", "outcome_ref": invitation.get("session_id", invitation["id"]), "reauth_required": True}
         return result
 
+    def _bound_process_available(self):
+        process = self.state["admission_process"]
+        if process is None:
+            return True  # 旧可信已运行夹具无进程引用；不伪造可监视身份。
+        try:
+            return self.launcher.observe_process(process["process_ref"], process["binding"]) == "running"
+        except Exception:
+            return False
+
     def finish_admission(self, *, now, success=True, fault=None):
         R.require(type(success) is bool, "invalid_arguments")
         with self.lock:
             if self.state["admission"] is not None:
                 invitation = self.state["invitations"][self.state["admission"]["invitation"]]
-                success = success and self._available_for_offer(self.state["offers"][invitation["offer_id"]])
+                success = success and self._available_for_offer(self.state["offers"][invitation["offer_id"]]) and self._bound_process_available()
             return super().finish_admission(now=now, success=success, fault=fault)
 
+    def reconcile_application(self, *, now, fault=None):
+        """可信监视调度；仅已绑定进程的确定退出可关闭会话，不补启动。"""
+        R.require(fault in (None, "before_commit", "after_commit"), "invalid_arguments")
+        with self.lock:
+            self._maintain(now)
+            R.require(self.state["ledger_healthy"], "temporarily_unavailable")
+            process = self.state["admission_process"]
+            observation = "unknown"
+            if process is not None:
+                try:
+                    observation = self.launcher.observe_process(process["process_ref"], process["binding"])
+                except Exception:
+                    observation = "unknown"
+            if type(observation) is not str or observation not in {"running", "exited"}:
+                observation = "unknown"
+            def reconcile():
+                if observation == "exited" and self.session is not None:
+                    self.session._close("application_exited", now)
+                return {"process_state": observation,
+                        "session_state": None if self.session is None else self.session.state["session"]["state"]}
+            return self._transaction(reconcile, fault)
+
     def _authorize_launch(self, payload, identity, now, rid):
+        R.require(not self.launcher.sealed, "temporarily_unavailable")
         record = self._offer(payload["offer_id"], identity)
         view = record["view"]
         R.require(view["state"] == "approved", "consent_required")
@@ -111,7 +150,7 @@ class LaunchHarness(A.AssetHarness):
         R.require("invitation" not in record, "invitation_used")
         permit = self.state["launch_permits"].get(payload["launch_permission_ref"])
         R.require(permit is not None and permit["offer_id"] == view["offer_id"] and permit["player"] == identity["principal"] and
-                  permit["scope_digest"] == view["scope_digest"] and now < permit["expires_at"], "consent_required")
+                  permit["scope_digest"] == view["scope_digest"] and permit["state"] == "active" and now < permit["expires_at"], "consent_required")
         R.require(payload["application_registration"] == permit["binding"]["application_registration"], "permission_denied")
         R.require(C.codec.canonical(permit["binding"]) == C.codec.canonical(record["launch_binding"]) ==
                   C.codec.canonical(self.launcher.binding()), "approval_stale")
@@ -133,7 +172,7 @@ class LaunchHarness(A.AssetHarness):
                           error=E.boundary_error("launch_failed", knowledge="accepted", safe_details={"operation_ref": rid}))
             offer = self.state["offers"][record["payload"]["offer_id"]]
             grant = self._grant(offer["view"]["grant_id"])
-            if grant["state"] == "active":
+            if grant["state"] == "active" and record["failure_reason"] != "launch_permission_revoked":
                 self._revoke({"object_type": "grant", "object_id": grant["grant_id"], "expected_revision": grant["revision"]}, self.state["last_now"])
 
     def _observation(self, record):
@@ -176,13 +215,20 @@ class LaunchHarness(A.AssetHarness):
             if old is not None:
                 R.require(old["digest"] == digest and old["player"] == identity["principal"], "id_conflict")
             else:
-                self._authorize_launch(payload, identity, now, rid)
+                R.require(not any(permit["request_id"] == rid for permit in self.state["launch_permits"].values()),
+                          "request_gone")
+                permit = self._authorize_launch(payload, identity, now, rid)
+                # 回执可回收，许可消费事实不可由“找不到回执”重置。
+                R.require(permit["request_id"] is None, "request_gone")
+                retention = self.state["offers"][payload["offer_id"]]["view"]["immutable_scope"]["limits"]["receipt_retention_ms"]
+                R.require(now <= C.codec.MAX_INTEGER - retention, "resource_limit")
                 R.require(len(self.state["launch_records"]) < 128, "resource_limit")
                 def accept():
                     permit = self._authorize_launch(payload, identity, now, rid)
                     permit["request_id"] = rid
                     self.state["launch_records"][rid] = {"digest": digest, "player": deepcopy(identity["principal"]),
                         "payload": deepcopy(payload), "binding": deepcopy(permit["binding"]), "dispatched": False,
+                        "gc_after": now + retention,
                         "state": "pending", "error": E.boundary_error("internal_failure", knowledge="unknown", safe_details={"operation_ref": rid})}
                 self._transaction(accept, "before_commit" if fault == "before_commit" else None)
             if fault == "after_accept":
@@ -202,7 +248,9 @@ class LaunchHarness(A.AssetHarness):
                         self.state["launch_records"][rid]["dispatched"] = True
                     self._transaction(mark_dispatch)
                 except C.ContractError as error:
-                    self._transaction(lambda: self._record_outcome(rid, {"state": "failed", "reason": error.code}))
+                    revoked = self.state["launch_permits"][payload["launch_permission_ref"]]["state"] == "revoked"
+                    reason = "launch_permission_revoked" if revoked else error.code
+                    self._transaction(lambda: self._record_outcome(rid, {"state": "failed", "reason": reason}))
                     return self._launch_reply(request)
                 if fault == "after_dispatch":
                     raise U.S.H.InjectedFailure(fault)
@@ -223,6 +271,18 @@ class LaunchHarness(A.AssetHarness):
                 return self._launch_reply(request)
             return self._transaction(finish, "before_commit" if fault == "before_result_commit" else "after_commit" if fault == "after_commit" else None)
 
+    def _revoke(self, payload, now):
+        if payload["object_type"] != "launch_permission":
+            return super()._revoke(payload, now)
+        permit = self.state["launch_permits"].get(payload["object_id"])
+        R.require(permit is not None and permit["player"] == self.fixture["player"], "permission_denied")
+        R.require(permit["revision"] == payload["expected_revision"], "generation_conflict")
+        if permit["state"] != "revoked":
+            R.require(permit["revision"] < C.codec.MAX_INTEGER, "resource_limit")
+            permit.update(state="revoked", revision=permit["revision"] + 1)
+        return {"object_type": "launch_permission", "object_id": payload["object_id"],
+                "revision": permit["revision"], "state": "revoked"}
+
     def _operation_view(self, payload, identity):
         if payload["operation"] != "launch.request":
             return super()._operation_view(payload, identity)
@@ -232,6 +292,54 @@ class LaunchHarness(A.AssetHarness):
         record = self.state["launch_records"][payload["original_request_id"]]
         return {"operation": "launch.request", "request_id": payload["original_request_id"], "state": record["state"],
                 "outcome_ref": record["payload"]["offer_id"], **({"error": deepcopy(record["error"])} if "error" in record else {})}
+
+    def retire_launcher(self, *, now, fault=None):
+        """先封存独立端口，再提交 authority 确认；不以 authority 回滚撤销封存。"""
+        R.require(fault in (None, "before_seal", "after_seal", "before_commit", "after_commit"), "invalid_arguments")
+        with self.lock:
+            self._maintain(now)
+            R.require(self.state["ledger_healthy"], "temporarily_unavailable")
+            R.require(self.session is None or self.session.state["session"]["state"] == "closed", "permission_denied")
+            R.require(all(record["state"] in {"done", "failed"} for record in self.state["launch_records"].values()),
+                      "temporarily_unavailable")
+            if fault == "before_seal":
+                raise U.S.H.InjectedFailure(fault)
+            self.launcher.seal()
+            if fault == "after_seal":
+                raise U.S.H.InjectedFailure(fault)
+            def acknowledge():
+                self.state["launcher_retired"] = True
+                return {"sealed": True, "acknowledged": True}
+            return self._transaction(acknowledge, fault if fault in {"before_commit", "after_commit"} else None)
+
+    def compact_retired_launcher(self, *, now, maximum=64):
+        """authority 已确认退役后才回收独立效果；原业务回执另走自身保留规则。"""
+        R.require(type(maximum) is int and 1 <= maximum <= 128, "invalid_arguments")
+        with self.lock:
+            self._maintain(now)
+            R.require(self.state["ledger_healthy"], "temporarily_unavailable")
+            R.require(self.state["launcher_retired"], "permission_denied")
+            return self.launcher.compact_sealed(maximum)
+
+    def compact_launch_receipts(self, *, now, maximum=64, fault=None):
+        """可信维护：只删达到最短保留期的终态回执，保留消费屏障及独立效果。"""
+        R.require(type(maximum) is int and 1 <= maximum <= 128, "invalid_arguments")
+        R.require(fault in (None, "before_commit", "after_commit"), "invalid_arguments")
+        with self.lock:
+            self._maintain(now)
+            R.require(self.state["ledger_healthy"], "temporarily_unavailable")
+            def compact():
+                eligible = sorted(rid for rid, record in self.state["launch_records"].items()
+                                  if record["state"] in {"done", "failed"} and
+                                  type(record.get("gc_after")) is int and now >= record["gc_after"])
+                selected = eligible[:maximum]
+                for rid in selected:
+                    record = self.state["launch_records"][rid]
+                    permit = self.state["launch_permits"].get(record["payload"]["launch_permission_ref"])
+                    R.require(permit is not None and permit["request_id"] == rid, "temporarily_unavailable")
+                    del self.state["launch_records"][rid]
+                return {"removed": len(selected), "remaining": len(eligible) - len(selected)}
+            return self._transaction(compact, fault)
 
     def restart_from_mock_ledger(self, *, now, intact=True):
         with self.lock:

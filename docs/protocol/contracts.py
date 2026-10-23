@@ -168,7 +168,7 @@ TYPES = {
                          "offer?": "OfferView", "error?": "Error", "receipt?": "Receipt",
                          "action?": "ActionResult", "revocation?": "RevocationResult"}),
     "ReadGrant": obj(session_id="Id", action_ids=array("Id"), access_revision="Revision", read_until="Nat"),
-    "Revocation": obj(object_type=enum("auto_rule", "grant", "invitation", "session", "capability", "relay", "result_read"),
+    "Revocation": obj(object_type=enum("auto_rule", "grant", "invitation", "session", "capability", "relay", "result_read", "launch_permission"),
                       object_id="Id", expected_revision="Revision"),
     "RevocationResult": obj(object_type="Name", object_id="Id", revision="Revision", state=enum("revoked", "consumed", "closed")),
     "PrivacyCompleted": obj(privacy_request_id="Id", status=enum("done", "partial", "denied"),
@@ -315,7 +315,7 @@ operation("capability.replace", "game", "management", "actions", "control", obj(
 operation("membership.replace", "game", "management", "core.events", "control", obj(instance="Instance", expected_revision="Revision", verified_members="Principals", membership_proof_ref="Id"),
           obj(revision="Revision"), "基础席位也有成员代次；新增队伍席位需 team；重加入增加代次且不扩旧 Scope。")
 operation("permission.revoke", "player game", "control", "core.session", "control", ref("Revocation"), ref("RevocationResult"),
-          "按对象验证撤销权；relay 对象先分派到 Relay owner 并按 relay.revoke 的角色/lane 授权，不采用本项游戏入口角色；auto_rule 仅所属玩家可撤且不级联已有 Grant；game 只走管理入口；result_read 单独撤销不伪造不存在。")
+          "按对象验证撤销权；relay 对象先分派到 Relay owner 并按 relay.revoke 的角色/lane 授权，不采用本项游戏入口角色；auto_rule 仅所属玩家可撤且不级联已有 Grant；launch_permission 仅所属玩家可撤且不撤销独立 Grant 或已发生启动效果；game 只走管理入口；result_read 单独撤销不伪造不存在。")
 operation("action.claim", "executor", "management", "actions", "control", obj(session_id="Id", action_id="Id", worker="Principal"),
           choice(obj(status=enum("claimed"), ticket="ExecutionTicket", arguments="JsonObject"), obj(status=enum("not_executable"), action="ActionResult")),
           "worker 必须登记；同控制请求可读原 ticket，ticket/step 仍唯一；新请求不领取已 executing 动作。")

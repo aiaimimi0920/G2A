@@ -4,7 +4,8 @@
 
 当前固定假设备和资源的字节装配分别见 [呈现证明](PRESENTATION_PROOF.md) 和
 [资源准备证明](ASSET_PROOF.md)。租约 revision、设备自身重启和有界补偿批次见
-[设备生命周期证明](DEVICE_LIFECYCLE_PROOF.md)；更多资源格式/preinstalled、长期回收和真实后台服务另验。
+[设备生命周期证明](DEVICE_LIFECYCLE_PROOF.md)。固定预装库存及关闭后的缓存/回执回收已补，
+见下文；更多格式、共享缓存引用、活跃回收与真实后台服务另验。
 
 ## 1. 必要端口与记录
 
@@ -42,15 +43,17 @@ function select_avatar_if_negotiated(features, requested, descriptor):
     descriptor.accepted_avatar_contracts) else avatar_incompatible
   // 不在不兼容时自动尝试第二候选；用户改选后重新协商
   if selected is verified preinstalled reference:
-    require descriptor renderer resolves exact content ID and compatible revision
+    require trusted Renderer catalog binds full (kind, asset_id, revision, format) to one digest
   else:
     require assets negotiated else feature_unsupported
     validate_manifest_shape_and_dependency_limits(selected.manifest)
   return frozen selected
 
-function prepare_resources(selected_avatar, approved_scope):
+function prepare_resources(selected_avatar, approved_scope, target_device):
   if absent: return no_resource_required
-  if preinstalled: return Renderer.verify_existing(selected_avatar.exact_id)
+  if preinstalled:
+    require exact frozen avatar identity and digest in target_device's trusted inventory
+    return verified existing resource without download or parsing
   manifests = walk_dependency_graph_with_cycle_detection(selected_avatar.manifest)
   require unique content IDs and depth/count/total_declared_size within approved limits
   receipts = []
@@ -73,8 +76,9 @@ function prepare_resources(selected_avatar, approved_scope):
     parsed = Parser.open(bytes, manifest.media_type, manifest.format_version,
       isolated=true, capabilities=none)
     require parsed.compatibility matches approved avatar and dependencies
-    Cache.publish_verified_atomically(digest, parsed, validation_receipt)
+    stage verified content and validation_receipt without making it visible
     receipts += validation_receipt
+  atomic(authority): publish entire verified closure + binding + operation receipt
   return receipts
 ```
 
@@ -83,6 +87,35 @@ function prepare_resources(selected_avatar, approved_scope):
 完整 Manifest 与冻结批准的匹配、同一 asset_id 的重复声明、解析后的 compatibility 及
 冻结 ResourcePolicy 的重验采用 `g2a-cjson-1` 规范字节等价。不得使用会将 `true` 与 `1`、
 `false` 与 `0` 合并的宿主语言相等性；对象键的排列顺序仍不影响等价性。
+
+预装目录以完整 Avatar 身份绑定不可替换的 content_digest，不能把同版本重新登记为其他
+内容。库存按目标设备核验，其他设备有库存不构成本机可用；join、acquire、resume 和
+handoff 都需重新检查，不因历史成功或缓存存在跳过。预装不要求 assets 能力，不下载、
+不解析；`asset.resolve` 只接受 manifest。无设备的固定夹具使用 `fixture-headless`，
+不是任意设备通配。见 [预装形象证明](PREINSTALLED_AVATAR_PROOF.md)。
+
+### 2.1 资源内容与查询回执的独立回收
+
+```text
+function compact_closed_asset_cache(now, budget):
+  maintain_trusted_time(now); require healthy ledger and closed session
+  require strict integer budget in 1..128
+  require every presentation job has committed release evidence for current device epoch
+  atomic(authority): remove at most budget cache entries; clear closed session asset binding
+  preserve asset receipts, closed facts, presentation receipts and installed catalog
+
+function compact_closed_asset_receipts(now, budget):
+  maintain_trusted_time(now); require healthy ledger and closed session
+  require strict integer budget in 1..128
+  atomic(authority): remove at most budget receipts with now >= frozen retain_until
+  preserve cached content, installed catalog and closed facts
+```
+
+设备实际 release 但 authority 未保存 ACK 时仍不能清缓存；无呈现任务则无需虚构 ACK。
+回执首次提交冻结受理时间加协商保留期并检查安全整数溢出，重试不续期。到期读取返回
+`request_gone`；清理后查询拒绝不代表未受理，旧请求仍被关闭/Grant 门禁阻断，不重解析。
+两种维护均不删除磁盘或卸载预装资源。详见 [缓存回收](ASSET_CACHE_RETENTION_PROOF.md)
+及 [回执回收](ASSET_RECEIPT_RETENTION_PROOF.md)。共享缓存引用与预装目录长期回收另验。
 
 ## 3. 呈现占用与最新用户意图
 
@@ -175,7 +208,7 @@ function finish_admission(session_id):
   if admission.failed: return session_closed(admission.failure_reason)
   if not still_authorized(session_id) or now >= admission.deadline:
     return fail_admission(session_id, expired_or_revoked)
-  receipts = prepare_resources(session.scope.avatar_selection, session.scope)
+  receipts = prepare_resources(session.scope.avatar_selection, session.scope, session.controller_device)
   if receipts failed: return fail_admission(session_id, resource_failure)
   if presentation negotiated:
     occupation = acquire(authority, device, session.id, session.control_generation,

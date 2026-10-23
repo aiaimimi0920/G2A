@@ -177,8 +177,11 @@ function ensure_companion_available(offer):
   if companion_verified_running: return authenticated_companion_channel
   permit = require_unused_valid_launch_permission(offer, player, application)
   process = Launcher.start(fixed_application_registration, permit)
-  if process failed:
+  if process failed because launch permission was revoked before dispatch:
+    record launch_failed without revoking independent offer grant; return launch_failed
+  if process has confirmed ordinary startup failure:
     record launch_failed; revoke unused offer grant; return launch_failed
+  if process outcome is unknown: return pending_without_redispatch
   return bind_process_to_expected_identity(process, offer.scope.agent)
 ```
 
@@ -193,6 +196,40 @@ authority 事务。`launch.request` 必须进一步拆成：精确批准/登记�
 本地可执行展开、故障点及限制见 [本地启动验证](LAUNCH_PROOF.md)。其 Consent 假端口
 额外绑定用户所见的完整应用登记，邀请还验证 fresh 原伙伴及登记设备；不能只凭历史
 进程记录进入 ready。生产适配器仍须兑现进程身份与受控凭据管道，不由内存夹具代证。
+
+### 4.1 启动许可撤销与精确进程观察
+
+`permission.revoke(launch_permission)` 只撤所属玩家的独立许可，以 CAS 保存 revoked。
+受理前拒绝启动；已受理未派发时重验许可并记录失败，但不撤独立 Grant。已派发而无
+确定效果时保持 unknown，不再调用 start；已有启动效果时保留历史事实，不终止进程。
+新启动意图必须新同意，不复活旧许可。完整时点与兼容规则见
+[独立撤销合同](LAUNCH_PERMISSION_REVOCATION.md)。
+
+```text
+function reconcile_application(now):
+  maintain_trusted_time(now); require healthy authority ledger
+  binding = admission's frozen process_ref and application binding
+  observation = Launcher.observe_process(binding)  // 独立观察，不启动、不终止
+  if missing binding or exception or malformed observation: return unknown
+  if observation == unknown: return unknown  // 不以缺记录推断退出
+  if observation == exited:
+    atomic(authority): close bound session and enqueue normal stop compensation
+  return observation without rewriting historical launch receipt
+```
+
+首次 join 只有在独立启动效果且当前已验证 running 时冻结精确进程绑定；同应用新进程
+不能完成旧准入或获取旧秘密。无精确引用的旧夹具不虚构监视证据。退出墓碑不因旧 running
+快照复活；未知监视不关闭既有会话，但未 ready 的准入仍须证明原绑定进程当前可用。
+这是显式可信 tick 的模型，不是 OS 守护进程，见 [进程监视证明](LAUNCH_PROCESS_MONITOR_PROOF.md)。
+
+### 4.2 独立 Launcher 最终退役
+
+退役先要求关联会话已关闭、authority 无 pending 启动，独立端口再核对没有 running、
+所有 entry 终态且所有已知效果都有退出见证，提交不可逆 sealed 屏障。authority 之后
+单独确认；确认失败不能回滚端口屏障。只有确认后才能有界回收 entries/effects/退出
+墓碑，sealed 标记必须保留，旧快照和迟到请求不能恢复 start。历史业务回执仍报告
+原事实，清理后无端口记录不代表未执行。见 [退役合同与故障证明](LAUNCHER_RETIREMENT_PROOF.md)。
+这是最终关闭，不是换代；新代绑定、重新同意和跨代迟到隔离尚须独立合同。
 
 ## 5. 邀请领取与加入
 

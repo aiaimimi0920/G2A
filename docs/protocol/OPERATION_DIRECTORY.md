@@ -169,7 +169,7 @@
 - 角色：`player / game`；入口：`control`；能力：`core.session`；重试族：`control`。
 - 输入：`permission_revoke_input`；必需字段：`object_type / object_id / expected_revision`；可选字段：`无`。
 - 成功输出：`permission_revoke_output`。
-- 语义条件：按对象验证撤销权；relay 对象先分派到 Relay owner 并按 relay.revoke 的角色/lane 授权，不采用本项游戏入口角色；auto_rule 仅所属玩家可撤且不级联已有 Grant；game 只走管理入口；result_read 单独撤销不伪造不存在。
+- 语义条件：按对象验证撤销权；relay 对象先分派到 Relay owner 并按 relay.revoke 的角色/lane 授权，不采用本项游戏入口角色；auto_rule 仅所属玩家可撤且不级联已有 Grant；launch_permission 仅所属玩家可撤且不撤销独立 Grant 或已发生启动效果；game 只走管理入口；result_read 单独撤销不伪造不存在。
 
 ## action.claim
 

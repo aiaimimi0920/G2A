@@ -93,6 +93,8 @@ class AdmissionHarness:
             return {"role": "agent", "principal": invitation["agent"], "invitation_id": invitation_id}
         identity = self.identities.get(credential)
         R.require(identity is not None, "unauthenticated")
+        if "expires_at" in identity:
+            R.require(type(identity["expires_at"]) is int and self.state["last_now"] < identity["expires_at"], "unauthenticated")
         expected = {"agent": self.fixture["agent"], "player": self.fixture["player"], "game": self.fixture["game"]}
         R.require(identity["role"] in expected and identity["principal"] == expected[identity["role"]], "permission_denied")
         return identity
@@ -148,6 +150,8 @@ class AdmissionHarness:
                          supported_resource_profiles=self.RESOURCE_PROFILES)
         return scope
 
+    PREJOIN_REVOCATIONS = frozenset({"grant", "invitation", "auto_rule"})
+
     def _scope_extras(self, scope, requested):
         """受限 profile 在最终关系检查前补充已协商字段。"""
 
@@ -161,7 +165,7 @@ class AdmissionHarness:
         with self.lock:
             self._maintain(now)
             def apply():
-                prejoin_revoke = op == "permission.revoke" and payload["object_type"] in {"grant", "invitation", "auto_rule"}
+                prejoin_revoke = op == "permission.revoke" and payload["object_type"] in self.PREJOIN_REVOCATIONS
                 if op not in self.LIFECYCLE and not prejoin_revoke:
                     R.require(self.session is not None, "session_not_writable")
                     if op == "permission.revoke":
@@ -172,7 +176,7 @@ class AdmissionHarness:
                 identity = self._identity(credential, op)
                 lane = "management" if identity["role"] == "game" else C.catalog.OPERATIONS[op]["lane"]
                 C.authorize_route(op, identity["role"], lane, self.PROFILE)
-                if prejoin_revoke and payload["object_type"] == "auto_rule":
+                if prejoin_revoke and payload["object_type"] in {"auto_rule", "launch_permission"}:
                     R.require(identity["role"] == "player", "permission_denied")
                 R.require(request["version"] == self.fixture["scope"]["version"], "unsupported_version")
                 R.require(len(raw) <= self.state["descriptor"]["limits"]["message_bytes"], "resource_limit")

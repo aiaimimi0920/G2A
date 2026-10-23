@@ -36,9 +36,10 @@ class AssetHarness(P.PresentationHarness):
         if "avatar" in scope["features"]:
             selected = requested.get("forced_avatar", self.state["descriptor"].get("avatar_requirements", {}).get("game_avatar") or requested.get("default_avatar"))
             R.require(selected is not None, "avatar_required")
-            R.require(selected["kind"] == "manifest" and "assets" in scope["features"], "feature_unsupported")
+            R.require(selected["kind"] == "preinstalled" or "assets" in scope["features"], "feature_unsupported")
             scope["avatar_selection"] = deepcopy(selected)
-            scope["resource_policy"] = deepcopy(self.resource_policy)
+            if "assets" in scope["features"]:
+                scope["resource_policy"] = deepcopy(self.resource_policy)
 
     def _asset_scope(self, now):
         R.require(self.session is not None, "permission_denied")
@@ -46,7 +47,8 @@ class AssetHarness(P.PresentationHarness):
         R.validate_grant(self.session.state["grant"], session["scope"], now=now)
         R.require(session["state"] == "active" and now < session["lease_deadline"], "session_closed")
         R.require(self.state["ledger_healthy"], "temporarily_unavailable")
-        R.require(C.codec.canonical(session["scope"]["resource_policy"]) == C.codec.canonical(self.resource_policy), "approval_stale")
+        if "resource_policy" in session["scope"]:
+            R.require(C.codec.canonical(session["scope"]["resource_policy"]) == C.codec.canonical(self.resource_policy), "approval_stale")
         return session["scope"]
 
     def _asset_reply(self, request, receipt):
@@ -65,6 +67,7 @@ class AssetHarness(P.PresentationHarness):
             R.require(credential == "resource-fixture" and self.session is not None, "permission_denied")
             scope = self.session.state["session"]["scope"]
             C.authorize_route("asset.resolve", "resource_owner", "local", scope["features"])
+            R.require(scope.get("avatar_selection", {}).get("kind") == "manifest", "feature_unsupported")
             R.require(self.state["ledger_healthy"], "temporarily_unavailable")
             R.require(request["version"] == scope["version"], "unsupported_version")
             R.require(len(raw) <= scope["limits"]["message_bytes"], "resource_limit")
@@ -77,6 +80,7 @@ class AssetHarness(P.PresentationHarness):
             digest = C.codec.digest("control", {key: request[key] for key in ("version", "operation", "payload", "extensions")})
             old = self.state["asset_receipts"].get(rid)
             R.require(old is None or old["digest"] == digest, "id_conflict")
+            R.require(old is None or now < old["retain_until"], "request_gone")
             if old is not None and "error" in old:
                 return self._asset_reply(request, old)
             self._asset_scope(now)
@@ -86,6 +90,8 @@ class AssetHarness(P.PresentationHarness):
                 R.require(old["cache_key"] == root_key, "approval_stale")
                 return self._asset_reply(request, old)
             R.require(len(self.state["asset_receipts"]) < 128, "resource_limit")
+            retention = scope["limits"]["receipt_retention_ms"]
+            R.require(now <= C.codec.MAX_INTEGER - retention, "invalid_arguments")
             try:
                 staged = self.resources.prepare(manifest, policy, self.state["asset_cache"])
                 failure = None
@@ -95,7 +101,8 @@ class AssetHarness(P.PresentationHarness):
                 # 即使可信端口在准备后通知了撤权/策略变化，也不能发布旧批准的缓存或 ready。
                 self._asset_scope(now)
                 R.require(root_key == self.resources.cache_key(manifest, policy), "approval_stale")
-                receipt = {"digest": digest, "cache_key": root_key, "outcome_ref": manifest["asset_id"]}
+                receipt = {"digest": digest, "cache_key": root_key, "outcome_ref": manifest["asset_id"],
+                           "retain_until": now + retention}
                 if failure is not None:
                     receipt["failure_reason"] = failure
                     receipt["error"] = E.boundary_error("operation_failed", knowledge="accepted",
@@ -112,32 +119,39 @@ class AssetHarness(P.PresentationHarness):
 
     def _resources_ready(self, now):
         scope = self._asset_scope(now)
+        if scope["avatar_selection"]["kind"] == "preinstalled":
+            return True  # 内容无需下载；目标设备的精确库存由 Renderer 门禁独立检查。
         binding = self.state["asset_binding"]
         root = self.resources.cache_key(scope["avatar_selection"]["manifest"], scope["resource_policy"])
         return (binding is not None and binding["root"] == root and
                 all(key in self.state["asset_cache"] for key in binding["keys"]))
 
-    def _has_assets(self):
-        return self.session is not None and "assets" in self.session.state["session"]["scope"]["features"]
+    def _has_avatar(self):
+        return self.session is not None and "avatar" in self.session.state["session"]["scope"]["features"]
+
+    def _renderer_accepts(self, device_id):
+        avatar = self.session.state["session"]["scope"]["avatar_selection"]
+        if avatar["kind"] == "preinstalled":
+            return self.resources.preinstalled_accepts(avatar, device_id)
+        return self.resources.renderer_accepts(avatar["manifest"], device_id)
 
     def _before_acquire(self, job, now):
-        if self._has_assets():
+        if self._has_avatar():
             R.require(self._resources_ready(now), "temporarily_unavailable")
-            manifest = self.session.state["session"]["scope"]["avatar_selection"]["manifest"]
-            R.require(self.resources.renderer_accepts(manifest, job["acquire"]["device_id"]), "avatar_incompatible")
+            R.require(self._renderer_accepts(job["acquire"]["device_id"]), "avatar_incompatible")
 
     def _prepare_rotation(self, record, session, now):
         super()._prepare_rotation(record, session, now)
-        if self._has_assets() and record["kind"] == "resume" and "presentation" not in session["scope"]["features"]:
+        if self._has_avatar() and record["kind"] == "resume" and "presentation" not in session["scope"]["features"]:
             # 无呈现配置也不能沿用已失效的 parser/policy 收据直接返回 ready。
             R.require(self._resources_ready(now), "temporarily_unavailable")
-            R.require(self.resources.renderer_accepts(session["scope"]["avatar_selection"]["manifest"], record["device"]), "avatar_incompatible")
+            R.require(self._renderer_accepts(record["device"]), "avatar_incompatible")
 
     def finish_admission(self, *, now, success=True, fault=None):
         R.require(type(success) is bool, "invalid_arguments")
         with self.lock:
             self._maintain(now)
-            if self._has_assets() and success and self.session.state["session"]["state"] == "active":
+            if self._has_avatar() and success and self.session.state["session"]["state"] == "active":
                 try:
                     ready = self._resources_ready(now)
                 except C.ContractError:
@@ -146,7 +160,7 @@ class AssetHarness(P.PresentationHarness):
                     if not ready:
                         return deepcopy(self.session.state["session"])
                     session = self.session.state["session"]
-                    success = self.resources.renderer_accepts(session["scope"]["avatar_selection"]["manifest"], session.get("controller_device"))
+                    success = self._renderer_accepts(session.get("controller_device"))
             return super().finish_admission(now=now, success=success, fault=fault)
 
     def advance_transfer(self, transfer_id, *, now, success=True, fault=None):
@@ -154,13 +168,12 @@ class AssetHarness(P.PresentationHarness):
         with self.lock:
             self._maintain(now)
             record = self.state["transfers"].get(transfer_id)
-            if self._has_assets() and record and record["view"]["status"] not in {"ready", "failed"}:
+            if self._has_avatar() and record and record["view"]["status"] not in {"ready", "failed"}:
                 try:
                     ready = self._resources_ready(now)
                 except C.ContractError:
                     ready = False
-                manifest = self.session.state["session"]["scope"]["avatar_selection"]["manifest"]
-                success = success and ready and self.resources.renderer_accepts(manifest, record["device"])
+                success = success and ready and self._renderer_accepts(record["device"])
             return super().advance_transfer(transfer_id, now=now, success=success, fault=fault)
 
     def _operation_view(self, payload, identity):
@@ -169,8 +182,44 @@ class AssetHarness(P.PresentationHarness):
         R.require(identity["principal"] == self.fixture["player"], "permission_denied")
         receipt = self.state["asset_receipts"].get(payload["original_request_id"])
         R.require(receipt is not None, "permission_denied")
+        R.require(self.state["last_now"] < receipt["retain_until"], "request_gone")
         return {"operation": "asset.resolve", "request_id": payload["original_request_id"], "outcome_ref": receipt["outcome_ref"],
                 "state": "failed" if "error" in receipt else "done", **({"error": deepcopy(receipt["error"])} if "error" in receipt else {})}
+
+    def compact_closed_asset_cache(self, *, now, maximum=64, fault=None):
+        """可信有界维护：关闭且全部呈现占用已证实释放后才回收内存内容。"""
+        R.require(type(maximum) is int and 1 <= maximum <= 128, "invalid_arguments")
+        R.require(fault in (None, "before_commit", "after_commit"), "invalid_arguments")
+        with self.lock:
+            self._maintain(now)
+            R.require(self.state["ledger_healthy"], "temporarily_unavailable")
+            R.require(self.session is not None and self.session.state["session"]["state"] == "closed", "permission_denied")
+            # 不由 authority 的 closed 状态推断独立 Renderer 已经停止读取资源。
+            R.require(all(self._release_complete(job) for job in self.state["presentation_jobs"].values()),
+                      "temporarily_unavailable")
+            def compact():
+                selected = sorted(self.state["asset_cache"])[:maximum]
+                for key in selected:
+                    del self.state["asset_cache"][key]
+                self.state["asset_binding"] = None
+                return {"removed": len(selected), "remaining": len(self.state["asset_cache"])}
+            return self._transaction(compact, fault)
+
+    def compact_closed_asset_receipts(self, *, now, maximum=64, fault=None):
+        """仅回收关闭会话到期回执；会话终态继续拒绝重执行，内容缓存独立回收。"""
+        R.require(type(maximum) is int and 1 <= maximum <= 128, "invalid_arguments")
+        R.require(fault in (None, "before_commit", "after_commit"), "invalid_arguments")
+        with self.lock:
+            self._maintain(now)
+            R.require(self.state["ledger_healthy"], "temporarily_unavailable")
+            R.require(self.session is not None and self.session.state["session"]["state"] == "closed", "permission_denied")
+            def compact():
+                expired = sorted(key for key, receipt in self.state["asset_receipts"].items() if now >= receipt["retain_until"])
+                selected = expired[:maximum]
+                for key in selected:
+                    del self.state["asset_receipts"][key]
+                return {"removed": len(selected), "remaining": len(expired) - len(selected)}
+            return self._transaction(compact, fault)
 
     def restart_from_mock_ledger(self, *, now, intact=True):
         restored = super().restart_from_mock_ledger(now=now, intact=intact)

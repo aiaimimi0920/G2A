@@ -7,8 +7,9 @@ parser 和 Renderer 能力登记；没有网络请求、文件解压或动态资
 ## 1. 批准范围与资源选择
 
 沿用 forced_avatar → game_avatar → default_avatar 的选择顺序；选中不兼容对象不自动
-回退。当前只支持 manifest avatar，preinstalled 明确拒绝，不能把字段契约齐全当作所有
-形象配置都可用。Scope 同时冻结选择的完整 Manifest 和本地 ResourcePolicy，经玩家精确
+回退。本检查点只支持 manifest avatar；后续 preinstalled 已补固定模型，见
+[预装形象证明](PREINSTALLED_AVATAR_PROOF.md)，不能把字段契约齐全当作所有形象配置都可用。
+manifest Scope 同时冻结选择的完整 Manifest 和本地 ResourcePolicy，经玩家精确
 批准后才能领取邀请。配置变更不静默扩大原 Scope。
 
 asset.resolve 仅接受固定 resource_owner 凭据，session/Scope 摘要/完整 root Manifest
@@ -100,7 +101,8 @@ BOM/AST/本地链接检查为 assets-final-hygiene.json，以实际结果为准�
 
 资源阶段当时未装配的 launch.request 已由后续 [启动增量](LAUNCH_PROOF.md) 补充；当前
 未装配入口还有 player_chat.forward、privacy.request/receipt 和五个 Relay 操作，完整列表
-见 [范围表](SESSION_OPERATION_COVERAGE.md)。资源本身仍无 preinstalled、
-真实格式 parser/沙箱、真实流式网络、缓存长期回收和跨进程存储。当前单锁/单会话/有界
+见 [范围表](SESSION_OPERATION_COVERAGE.md)。后续预装形象模型见上述增量；资源本身仍无
+真实格式 parser/沙箱、真实流式网络和跨进程存储。关闭会话缓存有界回收已由后续
+[缓存生命周期证明](ASSET_CACHE_RETENTION_PROOF.md) 补充，活跃/共享缓存与回执回收仍待验。当前单锁/单会话/有界
 闭包验证不等于所有交错、网络攻防、版权或部署验收。设备租约更新与后台补偿等上一轮
 限制仍保留。没有修改旧 SDK、提交推送、部署或运行 GitHub Actions。

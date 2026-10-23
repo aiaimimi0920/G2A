@@ -1990,7 +1990,8 @@
             "session",
             "capability",
             "relay",
-            "result_read"
+            "result_read",
+            "launch_permission"
           ]
         },
         "object_id": {
