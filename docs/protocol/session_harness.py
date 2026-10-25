@@ -237,9 +237,23 @@ class SessionHarness(S.EventServer):
             return
         self._reserve_stop()
         session.update(state="closed", ready=False, close_reason=reason)
-        self.action_model.revoke(now=now)
+        self._revoke_write(now)
         self._sync_action(now)
         self._notice("session.closed", {"session": self.state["session"]}, now)
+
+    def _revoke_write(self, now):
+        self.action_model.revoke(now=now)
+
+    def _revocation_binding(self, target):
+        session = self.state["session"]
+        if target == "capability":
+            return session["capabilities_revision"], None
+        revision = self.state["result_access_revision"] if target == "result_read" else self.state["grant"]["revision"]
+        return revision, self.state["grant"]["grant_id"] if target == "grant" else session["session_id"]
+
+    def _revoke_closed_object(self, target, now):
+        self._close("revoked", now)
+        self.state["grant"]["revision"] += 1
 
     def _session_control(self, raw, request, credential, now):
         identity = self._identity(credential)
@@ -283,10 +297,10 @@ class SessionHarness(S.EventServer):
             if target == "capability":
                 R.require("actions" in scope["features"], "feature_unsupported")
                 R.require(oid in scope["action_ids"], "permission_denied")
-                revision, target_id = session["capabilities_revision"], oid
+                revision, _ = self._revocation_binding(target)
+                target_id = oid
             else:
-                revision = self.state["result_access_revision"] if target == "result_read" else self.state["grant"]["revision"]
-                target_id = self.state["grant"]["grant_id"] if target == "grant" else session["session_id"]
+                revision, target_id = self._revocation_binding(target)
             R.require(oid == target_id, "permission_denied")
             R.require(payload["expected_revision"] == revision, "generation_conflict")
             if target == "capability":
@@ -305,8 +319,7 @@ class SessionHarness(S.EventServer):
                     self.state["result_read_revoked"].add((R.principal_key(scope["agent"]), action_id))
                 self.state["result_access_revision"] += 1
             else:
-                self._close("revoked", now)
-                self.state["grant"]["revision"] += 1
+                self._revoke_closed_object(target, now)
             result = {"object_type": target, "object_id": oid, "revision": revision + 1,
                       "state": "closed" if target == "session" else "revoked"}
         else:

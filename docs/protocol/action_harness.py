@@ -374,10 +374,12 @@ class ActionHarness:
                 if self.model.action != before:
                     self.revision += 1
 
-    def revoke(self, *, now):
+    def revoke(self, *, now, revoke_grant=True):
         """已认证管理端口夹具。写权与结果读权分开。"""
         with self.lock:
-            self.authority.state["grant"]["state"] = "revoked"
+            R.require(type(revoke_grant) is bool, "invalid_arguments")
+            if revoke_grant:
+                self.authority.state["grant"]["state"] = "revoked"
             self.model.stop(revoke=True)
             self.read_until = min(self.read_until, now + self._scope()["result_retention_ms"])
             self.revision += 1
