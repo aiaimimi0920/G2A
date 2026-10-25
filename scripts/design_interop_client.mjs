@@ -6,18 +6,28 @@ import { createHash } from 'node:crypto';
 import { canonical, decode, digest } from '../docs/protocol/codec_peer.mjs';
 import { runEpochBindingCases } from '../docs/protocol/epoch_binding_peer.mjs';
 import { runFanoutCases } from '../docs/protocol/revoke_fanout_peer.mjs';
+import { runSharedGrantCases } from '../docs/protocol/shared_grant_peer.mjs';
+import { runSharedFanoutCases } from '../docs/protocol/shared_fanout_peer.mjs';
 
+// 全套串行场景的绝对预算，不是单次协议 SLA；外层 Python 另留退出/报告余量。
+const fixtureBudgetMs = 120000;
 const child = spawn(process.argv[2], [process.argv[3], '--serve'], { stdio: ['pipe', 'pipe', 'pipe'] });
 let stderr = '';
+let fixtureTimedOut = false, lastFrame = null, fixtureExit = null;
+const fixtureStarted = performance.now();
 child.stderr.on('data', data => { stderr = (stderr + data).slice(-8192); });
+child.on('exit', (code, signal) => { fixtureExit = { code, signal }; });
 const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
 let calls = 0, wireCalls = 0, codecCases = 0;
 const operations = new Set();
 async function command(frame) {
   calls++;
+  lastFrame = { kind: frame.kind, ...(frame.action ? { action: frame.action } : {}) };
   child.stdin.write(JSON.stringify(frame) + '\n');
   const { value, done } = await lines.next();
-  assert.ok(!done, `fixture server closed: ${stderr}`);
+  assert.ok(!done, `fixture server closed: ${JSON.stringify({ timed_out: fixtureTimedOut,
+    elapsed_ms: Math.round(performance.now() - fixtureStarted), budget_ms: fixtureBudgetMs, calls, wire_calls: wireCalls,
+    last_frame: lastFrame, exit: fixtureExit })}: ${stderr}`);
   return JSON.parse(value);
 }
 
@@ -69,7 +79,7 @@ function reducePage(previous, page) {
   return next;
 }
 
-const timeout = setTimeout(() => { child.kill(); process.exitCode = 1; }, 60000);
+const timeout = setTimeout(() => { fixtureTimedOut = true; child.kill(); process.exitCode = 1; }, fixtureBudgetMs);
 try {
   // 整数形键顺序、非 BMP 标量排序、控制转义、组合字符和特殊对象键均为手写见证。
   const valid = ['null', 'true', '-9007199254740991', '9007199254740991',
@@ -1300,7 +1310,11 @@ try {
     sealed_ports: retiredPorts, start_calls: retiredStarts, wire_calls: wireCalls - retirementBefore };
   const epochBinding = await runEpochBindingCases(command);
   const revokeFanout = await runFanoutCases(command);
-  console.log(JSON.stringify({ passed: true, revoke_fanout: revokeFanout, launcher_retirement: launcherRetirement, launch_retention: launchRetention, launch_monitor: launchMonitor, launch_revocation: launchRevocation, preinstalled, relay_settlement: relaySettlement, relay_rotation: relayRotation, relay_epoch_profile: relayEpochProfile, epoch_binding: epochBinding, node: process.version, codec_cases: codecCases,
+  const sharedGrant = await runSharedGrantCases(command);
+  const sharedFanout = await runSharedFanoutCases(command);
+  assert.equal(fixtureTimedOut, false, 'fixture absolute budget exceeded');
+  console.log(JSON.stringify({ passed: true, shared_grant: sharedGrant, revoke_fanout: revokeFanout, launcher_retirement: launcherRetirement, launch_retention: launchRetention, launch_monitor: launchMonitor, launch_revocation: launchRevocation, preinstalled, relay_settlement: relaySettlement, relay_rotation: relayRotation, relay_epoch_profile: relayEpochProfile, epoch_binding: epochBinding, node: process.version, codec_cases: codecCases,
+    shared_fanout: sharedFanout, elapsed_ms: Math.round(performance.now() - fixtureStarted), budget_ms: fixtureBudgetMs,
     fixture_commands: calls, wire_calls: wireCalls, wire_operations: [...operations].sort(),
     recovered_events: page.events.length, world_effects: 2, admission_ready_events: readyPage.events.length,
     control_events: controlPage.events.length, control_change_events: controlPage.events.filter(e => e.envelope.type === 'session.control_changed').length,

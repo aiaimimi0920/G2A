@@ -48,6 +48,8 @@
 40. [固定会话能力撤销](CAPABILITY_REVOKE_PROOF.md)：capability 对象的 CAS、单向权限屏障、停止动作、保留效果/结果读权及原玩家回执查询。
 41. [自动批准规则与独立撤销](AUTO_RULE_PROOF.md)：明确期限/时长、严格匹配、独立 Grant、旧批准重放、玩家撤销、启动隔离和跨语言新证据。
 42. [原请求客户端恢复](REQUEST_RECOVERY_PROOF.md)：参考 HTTP/JSON-RPC/MCP 的保守错误恢复、原字节重试、业务 ID 查证、预算和未知结果保护。
+43. [共享 Grant 的多会话授权域](SHARED_GRANT_PROOF.md)：唯一 owner、真实邀请/加入、单次原子撤销、独立会话/结果读权、不可回滚效果及可信恢复；候选 profile 与正式统一入口分开计数。
+44. [共享 Grant 的跨 authority 传播](SHARED_GRANT_FANOUT_PROOF.md)：可信 owner 分组、整个授权域范围、一次请求/组 ACK、原字节恢复、独立 owner 重启与可信重绑；不宣称全局原子撤销。
 
 本阶段状态：已有整体协议工作草案与假实现级流程基线，正在进行反例驱动的分层装配复核，不能宣称全部协议开发已无遗漏。未替换实验 wire/schema，未发布稳定版本。正常与失败流程的证据分别落在模型实际断言和人工推演中，不混同为真实环境测试。
 

@@ -193,6 +193,15 @@ capabilities_revision 共用 CAS；撤销屏障不能由 capability.replace 重�
 清除，且不撤销历史结果读权。此受限装配不代表实例级多会话传播，详见
 [能力撤销证明](CAPABILITY_REVOKE_PROOF.md)。
 
+共享 Grant 的候选装配由唯一 owner 原子撤销关联邀请和全部活动/接入中会话，不能以
+多个独立 Grant 撤销或顺序子提交冒充；单独关闭一个 session 不推进共享 Grant revision。
+独立结果读权、已发生效果、丢回复重放及恢复边界见 [共享授权域证明](SHARED_GRANT_PROOF.md)。
+该固定 profile 尚未迁入所有组合 Harness，不宣称跨 authority 全局原子性。
+跨 authority 传播按可信 owner 与精确 Grant/Scope/实例/玩家绑定分组，同组复用一份请求
+及原回执，不对两个会话各发一次旧 CAS。grant 的影响范围是整个已选授权域，包含派发前
+新加入的关联会话和未消费邀请；冻结路由选集不等于冻结依赖对象清单。精确会话关闭应选
+session。组 unknown/ACK、独立 owner 重启后的可信重绑见 [分组传播证明](SHARED_GRANT_FANOUT_PROOF.md)。
+
 ## 8. 会话、租约与持久恢复
 
 核心 session 只有 active/closed；“暂时失联”是连接观察状态，不创建第二种可绕过租约的权限。创建 session 时设 lease_deadline；有效 heartbeat/events polling 或新接受的伙伴提交可续租，旧重复收据不能续租。闭会原因包括 left/revoked/expired/host_shutdown/protocol_violation。closed 不能被 heartbeat 重新激活。

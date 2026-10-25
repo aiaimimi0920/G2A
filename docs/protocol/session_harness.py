@@ -18,13 +18,14 @@ C, R = S.C, S.R
 
 
 class SessionHarness(S.EventServer):
+    _ACTION_HARNESS = A.ActionHarness
     WIRE_OPERATIONS = frozenset({"chat.send", "context.publish", "session.snapshot", "session.events",
         "action.request", "action.cancel", "action.query", "action.confirm", "action.claim", "action.commit_result",
         "session.heartbeat", "session.close", "permission.revoke", "capability.replace", "membership.replace", "player_chat.forward"})
 
     def __init__(self, fixture, records, *, decisions=None, membership_proofs=None, player_seat_proofs=None):
         super().__init__(fixture, records)
-        self.action_model = A.ActionHarness(fixture, decisions=decisions, authority=self)
+        self.action_model = self._ACTION_HARNESS(fixture, decisions=decisions, authority=self)
         self.pending_sync = False
         self.membership_proofs = deepcopy(membership_proofs or {})
         self.player_seat_proofs = deepcopy(player_seat_proofs or {})

@@ -12,6 +12,14 @@ spec.loader.exec_module(V)
 class InteropGateTests(unittest.TestCase):
     def valid(self):
         return {"passed": True, "relay_epoch_profile": {"passed": True, "epoch": 0, "wire_calls": 9},
+            "shared_fanout": {"passed": True, "scope": "candidate-shared-grant-fanout",
+                "faults": ["before_commit", "after_commit", "lose_ack"], "completed": 3,
+                "wire_calls": 48, "fixture_calls": 108, "grouped_acks": 6, "trusted_rebindings": 3,
+                "preserved_effects": 3, "stale_snapshots_rejected": 3},
+            "shared_grant": {"passed": True, "scope": "candidate-shared-grant-fixture",
+                "faults": ["before_commit", "after_first_close", "after_commit"], "completed": 3,
+                "wire_calls": 64, "fixture_calls": 137, "closed_sessions": 6, "redacted_joins": 6,
+                "snapshots_rejected": 1, "preserved_effects": 6, "isolated_session": True},
             "launch_revocation": {"passed": True, "phases": 2, "wire_calls": 16},
             "revoke_fanout": {"passed": True, "kinds": ["session", "grant", "result_read", "capability"],
                               "scope": "candidate-coordinator-fixture", "completed": 4, "wire_calls": 28,
@@ -40,6 +48,35 @@ class InteropGateTests(unittest.TestCase):
 
     def test_current_summary_passes(self):
         self.assertTrue(V.peer_passed(self.valid()))
+
+    def test_shared_grant_evidence_requires_atomic_failure_windows_effects_and_isolation(self):
+        for field, value in (("passed", False), ("scope", "independent-grants"), ("faults", ["before_commit", "after_commit"]),
+                             ("completed", True), ("completed", 2), ("wire_calls", True), ("wire_calls", 63),
+                             ("fixture_calls", True), ("fixture_calls", 136), ("closed_sessions", True), ("closed_sessions", 5),
+                             ("redacted_joins", True), ("redacted_joins", 5), ("snapshots_rejected", True), ("snapshots_rejected", 0),
+                             ("preserved_effects", True), ("preserved_effects", 5), ("isolated_session", 1), ("isolated_session", False)):
+            summary = self.valid(); summary["shared_grant"][field] = value
+            self.assertFalse(V.peer_passed(summary))
+        for value in (None, [], {}, True):
+            summary = self.valid(); summary["shared_grant"] = value
+            self.assertFalse(V.peer_passed(summary))
+        summary = self.valid(); del summary["shared_grant"]
+        self.assertFalse(V.peer_passed(summary))
+
+    def test_shared_fanout_requires_owner_group_ack_rebinding_and_original_wire_recovery(self):
+        for field, value in (("passed", False), ("scope", "independent-grants"), ("faults", ["after_commit"]),
+                             ("completed", True), ("completed", 2), ("wire_calls", True), ("wire_calls", 47),
+                             ("fixture_calls", True), ("fixture_calls", 107), ("grouped_acks", True), ("grouped_acks", 5),
+                             ("trusted_rebindings", True), ("trusted_rebindings", 2),
+                             ("preserved_effects", True), ("preserved_effects", 2),
+                             ("stale_snapshots_rejected", True), ("stale_snapshots_rejected", 2)):
+            summary = self.valid(); summary["shared_fanout"][field] = value
+            self.assertFalse(V.peer_passed(summary))
+        for value in (None, [], {}, True):
+            summary = self.valid(); summary["shared_fanout"] = value
+            self.assertFalse(V.peer_passed(summary))
+        summary = self.valid(); del summary["shared_fanout"]
+        self.assertFalse(V.peer_passed(summary))
 
     def test_fanout_requires_all_four_independent_object_kinds(self):
         for field, value in (("passed", False), ("kinds", ["session"]), ("scope", "public-api"),

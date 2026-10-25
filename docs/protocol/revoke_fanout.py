@@ -1,6 +1,7 @@
 """候选跨 authority 会话、Grant、结果读权与明确能力撤销；不增加公开操作。"""
 
 from copy import deepcopy
+from contextlib import ExitStack
 from hashlib import sha256
 import importlib.util
 import json
@@ -65,9 +66,14 @@ class SessionRevokeFanout:
     @staticmethod
     def binding(port):
         session = port.state["session"]
-        return {"instance": deepcopy(session["scope"]["instance"]), "session_id": session["session_id"],
+        binding = {"instance": deepcopy(session["scope"]["instance"]), "session_id": session["session_id"],
                 "grant_id": port.state["grant"]["grant_id"],
                 "scope_digest": C.codec.digest("scope", session["scope"]), "player": deepcopy(session["scope"]["player"])}
+        owner_id = getattr(port, "grant_owner_id", None)
+        if owner_id is not None:
+            C.validate_type("Id", owner_id)
+            binding["grant_owner_id"] = owner_id
+        return binding
 
     def register(self, port, credential):
         """可信登记，不接受网络调用方传入 URL、authority 身份或凭据映射。"""
@@ -95,6 +101,29 @@ class SessionRevokeFanout:
             self._owner(player)
             return {"revision": self.catalogue_revision,
                     "targets": {key: deepcopy(target["binding"]) for key, target in self.targets.items()}}
+
+    def rebind_target(self, key, port, credential, *, player):
+        """可信恢复链更换端口，不改变目录身份、冻结请求或选集；不接受快照自报端口。"""
+        with self.lock:
+            self._owner(player)
+            C.validate_type("Id", key)
+            R.require(key in self.targets, "permission_denied")
+            target = self.targets[key]
+            with ExitStack() as acquired:
+                # 不合法的反向重绑也须可拒绝；不同协调器必须按同一顺序获取双端口锁。
+                locks = {id(lock): lock for lock in (target["port"].lock, port.lock)}
+                for _, lock in sorted(locks.items()):
+                    acquired.enter_context(lock)
+                R.require(C.codec.canonical(self.binding(port)) == C.codec.canonical(target["binding"]), "permission_denied")
+                identity = port._identity(credential)
+                R.require(identity["role"] == "player" and identity["principal"] == self.player
+                          and credential == target["credential"], "permission_denied")
+                if port is not target["port"]:
+                    recovered = getattr(port, "_trusted_recovery_of", None)
+                    R.require(recovered is not None and recovered(target["port"]) is True, "permission_denied")
+                target["port"] = port
+            # 逻辑账本不变；恢复继续只接回当前可信端口映射，不从旧快照恢复对象引用。
+            return key
 
     def retire_target(self, key, *, player, expected_catalogue_revision, fault=None):
         """明确移出未来选择，不撤销远端权限；未决意图不可通过目录维护遗忘。"""
@@ -127,7 +156,7 @@ class SessionRevokeFanout:
             return deepcopy(receipt)
 
     def begin(self, operation_id, targets, *, player, catalogue_revision, object_type="session", capability_ids=None):
-        """调用者已认证的玩家只可选择可信登记目标；每目标冻结独立 CAS revision。"""
+        """冻结授权对象与 CAS；共享 Grant 的 session 是入口，不是 Grant-wide 影响范围。"""
         with self.lock:
             self._owner(player)
             C.validate_type("Id", operation_id)
@@ -163,11 +192,25 @@ class SessionRevokeFanout:
                         scope = port.state["session"]["scope"]
                         R.require("actions" in scope["features"] and action_id in scope["action_ids"], "permission_denied")
             R.require(len(self.records) < 64, "resource_limit")
-            items = {}
+            items, groups = {}, {}
             for key, revision in sorted(targets.items()):
                 target = self.targets[key]
+                group = None
+                if object_type == "grant" and "grant_owner_id" in target["binding"]:
+                    with target["port"].lock:
+                        R.require(C.codec.canonical(self.binding(target["port"])) == C.codec.canonical(target["binding"]), "permission_denied")
+                        grant = target["port"].state["grant"]
+                        already_revoked = grant["state"] == "revoked" and grant["revision"] == revision
+                    domain = {name: value for name, value in target["binding"].items() if name != "session_id"}
+                    group = "grant-" + sha256(C.codec.canonical(domain)).hexdigest()
+                    if group in groups:
+                        R.require(groups[group]["revision"] == revision, "invalid_arguments")
+                        groups[group]["members"].append(key)
+                    else:
+                        groups[group] = {"binding": deepcopy(domain), "revision": revision, "members": [key],
+                                         "impact": "entire_grant", "already_revoked": already_revoked}
                 object_id = capability_ids[key] if object_type == "capability" else target["binding"]["grant_id" if object_type == "grant" else "session_id"]
-                rid = "fanout-" + sha256(C.codec.canonical([self.coordinator_id, operation_id, key])).hexdigest()
+                rid = "fanout-" + sha256(C.codec.canonical([self.coordinator_id, operation_id, group or key])).hexdigest()
                 request = {"version": target["port"].state["session"]["scope"]["version"],
                            "operation": "permission.revoke", "request_id": rid, "extensions": {},
                            "payload": {"object_type": object_type, "object_id": object_id,
@@ -176,9 +219,11 @@ class SessionRevokeFanout:
                 C.validate_request(raw)
                 items[key] = {"raw": raw, "request_id": rid, "state": "pending", "revision": revision,
                               "object_type": object_type, "object_id": object_id}
+                if group is not None:
+                    items[key]["grant_group"] = group
             self.records[operation_id] = {"selection": deepcopy(targets), "object_type": object_type,
                                           "capability_ids": deepcopy(capability_ids), "items": items,
-                                          "catalogue_revision": catalogue_revision}
+                                          "catalogue_revision": catalogue_revision, "grant_groups": groups}
             self._checkpoint()
             return self.view(operation_id, player=player)
 
@@ -189,9 +234,12 @@ class SessionRevokeFanout:
             R.require(record is not None, "permission_denied")
             states = {key: item["state"] for key, item in record["items"].items()}
             complete = sum(state == "acknowledged" for state in states.values())
-            return {"operation_id": operation_id, "object_type": record["object_type"],
+            result = {"operation_id": operation_id, "object_type": record["object_type"],
                     "catalogue_revision": record["catalogue_revision"], "state": "done" if complete == len(states) else
                     "partial" if complete else "pending", "targets": states}
+            if record["grant_groups"]:
+                result["grant_groups"] = deepcopy(record["grant_groups"])
+            return result
 
     def deliver(self, operation_id, key, *, player, now, remote_fault=None, lose_ack=False):
         with self.lock:
@@ -204,11 +252,13 @@ class SessionRevokeFanout:
             if item["state"] == "acknowledged":
                 return self.view(operation_id, player=player)
             target = self.targets[key]
+            members = record["grant_groups"][item["grant_group"]]["members"] if "grant_group" in item else [key]
             # 接收方锁覆盖绑定检查与受理；仅在协调器侧提前检查存在换代 TOCTOU。
             with target["port"].lock:
                 R.require(C.codec.canonical(self.binding(target["port"])) == C.codec.canonical(target["binding"]),
                           "permission_denied")
-                item["state"] = "unknown"
+                for member in members:
+                    record["items"][member]["state"] = "unknown"
                 self._checkpoint()  # 必须先保存派发知识，再跨越独立接收方提交边界。
                 try:
                     raw_reply = target["port"].submit(item["raw"], target["credential"], now=now, fault=remote_fault)
@@ -219,14 +269,16 @@ class SessionRevokeFanout:
                 reply = C.codec.decode(raw_reply)
                 C.validate_reply("permission.revoke", item["request_id"], reply)
                 result = reply.get("result", {})
+                unchanged = "grant_group" in item and record["grant_groups"][item["grant_group"]]["already_revoked"]
                 valid = (result.get("object_type") == item["object_type"] and result.get("object_id") == item["object_id"]
                          and result.get("state") == ("closed" if item["object_type"] == "session" else "revoked")
-                         and result.get("revision") == item["revision"] + 1)
+                         and result.get("revision") == item["revision"] + (0 if unchanged else 1))
             except Exception:
                 # 无响应/拒绝不能证明原请求未提交，也不能撤销其他 authority 已提交事实。
                 valid = False
             if valid and not lose_ack:
-                item["state"] = "acknowledged"
+                for member in members:
+                    record["items"][member]["state"] = "acknowledged"
                 self._checkpoint()
             return self.view(operation_id, player=player)
 

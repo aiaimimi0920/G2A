@@ -32,6 +32,8 @@ def serve():
     codec = session.C.codec
     epoch_fixture = None
     fanout_fixture = None
+    shared_grant_fixture = None
+    shared_fanout_fixture = None
     while True:
         line = sys.stdin.buffer.readline(2_097_153)
         if not line:
@@ -44,6 +46,14 @@ def serve():
             if epoch_fixture is None:
                 epoch_fixture = load("interop_epoch_fixture", "epoch_interop_fixture.py").EpochInteropFixture()
             output = epoch_fixture.submit(frame)
+        elif kind == "shared_fanout":
+            if shared_fanout_fixture is None:
+                shared_fanout_fixture = load("interop_shared_fanout_fixture", "shared_fanout_interop.py").SharedFanoutInteropFixture()
+            output = shared_fanout_fixture.submit(frame)
+        elif kind == "shared_grant":
+            if shared_grant_fixture is None:
+                shared_grant_fixture = load("interop_shared_grant_fixture", "shared_grant_interop.py").SharedGrantInteropFixture()
+            output = shared_grant_fixture.submit(frame)
         elif kind == "revoke_fanout":
             if fanout_fixture is None:
                 fanout_fixture = load("interop_fanout_fixture", "revoke_fanout_interop.py").FanoutInteropFixture()
@@ -432,7 +442,30 @@ def peer_passed(summary):
     retirement = summary.get("launcher_retirement")
     fanout = summary.get("revoke_fanout")
     catalogue = fanout.get("dynamic_catalogue") if type(fanout) is dict else None
+    shared = summary.get("shared_grant")
+    grouped = summary.get("shared_fanout")
     return (type(epoch) is dict and epoch.get("passed") is True
+            and type(grouped) is dict and grouped.get("passed") is True
+            and grouped.get("scope") == "candidate-shared-grant-fanout"
+            and grouped.get("faults") == ["before_commit", "after_commit", "lose_ack"]
+            and type(grouped.get("completed")) is int and grouped["completed"] == 3
+            and type(grouped.get("wire_calls")) is int and grouped["wire_calls"] >= 48
+            and type(grouped.get("fixture_calls")) is int and grouped["fixture_calls"] >= 108
+            and type(grouped.get("grouped_acks")) is int and grouped["grouped_acks"] == 6
+            and type(grouped.get("trusted_rebindings")) is int and grouped["trusted_rebindings"] == 3
+            and type(grouped.get("preserved_effects")) is int and grouped["preserved_effects"] == 3
+            and type(grouped.get("stale_snapshots_rejected")) is int and grouped["stale_snapshots_rejected"] == 3
+            and type(shared) is dict and shared.get("passed") is True
+            and shared.get("scope") == "candidate-shared-grant-fixture"
+            and shared.get("faults") == ["before_commit", "after_first_close", "after_commit"]
+            and type(shared.get("completed")) is int and shared["completed"] == 3
+            and type(shared.get("wire_calls")) is int and shared["wire_calls"] >= 64
+            and type(shared.get("fixture_calls")) is int and shared["fixture_calls"] >= 137
+            and type(shared.get("closed_sessions")) is int and shared["closed_sessions"] == 6
+            and type(shared.get("redacted_joins")) is int and shared["redacted_joins"] == 6
+            and type(shared.get("snapshots_rejected")) is int and shared["snapshots_rejected"] == 1
+            and type(shared.get("preserved_effects")) is int and shared["preserved_effects"] == 6
+            and shared.get("isolated_session") is True
             and type(fanout) is dict and fanout.get("passed") is True
             and fanout.get("kinds") == ["session", "grant", "result_read", "capability"]
             and fanout.get("scope") == "candidate-coordinator-fixture"
@@ -510,7 +543,8 @@ def main():
         return 1
     result = subprocess.run([node, str(ROOT / "scripts/design_interop_client.mjs"), sys.executable, str(Path(__file__).resolve())],
                             cwd=ROOT, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8"},
-                            capture_output=True, text=True, encoding="utf-8", timeout=90)
+                            # JS 120s 绝对预算 + 30s 退出余量；统一验证外层仍为 180s。
+                            capture_output=True, text=True, encoding="utf-8", timeout=150)
     try:
         summary = json.loads(result.stdout)
     except ValueError:

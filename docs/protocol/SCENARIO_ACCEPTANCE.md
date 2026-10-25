@@ -35,6 +35,8 @@
 | 启动回执与独立端口退役 | 回收不重启动、独立封存/确认、迟到请求拒绝 | LAUNCH_RECEIPT_RETENTION.md / LAUNCHER_RETIREMENT_PROOF.md |
 | 两独立会话 authority 撤销传播 | 独立协调器身份、partial 不伪造 done、可信快照/原请求恢复、独立效果/读权 | CROSS_AUTHORITY_REVOKE_PROOF.md |
 | 动态撤权目录与同 authority 多会话 | 冻结目录版本、未决不遗忘、退休墓碑、旧回放和独立会话读权 | FANOUT_CATALOGUE_PROOF.md |
+| 同一 Grant 的多会话撤销 | 唯一 owner、邀请与 pending join、一次原子关闭、独立 session/读权、效果和恢复 | SHARED_GRANT_PROOF.md |
+| 共享 Grant 跨 authority 传播 | 按受信 owner 去重、Grant-wide 范围、组 unknown/ACK、独立重启与可信重绑 | SHARED_GRANT_FANOUT_PROOF.md |
 
 表内证据仅覆盖各证明声明的配置。设备、资源、启动、隐私及 Relay 完整既有证明索引
 见 [操作覆盖](SESSION_OPERATION_COVERAGE.md)，不能据本表推断任意配置互通。
@@ -43,7 +45,7 @@
 
 | 场景包 | 必须明确并验证的边界 | 当前状态 |
 | --- | --- | --- |
-| 多会话与跨 authority 撤权 | 对象命名、撤权传播提交点、部分故障、独立读权 | 四类组合、可信恢复、动态目录增减及两个同 authority 独立会话已补；共享 Grant、其他对象、多玩家及全局准入/执行屏障待验 |
+| 多会话与跨 authority 撤权 | 对象命名、撤权传播提交点、部分故障、独立读权 | 四类组合、可信恢复、动态目录及同 authority 独立会话已有；共享 Grant 的原子撤销/加入竞态、跨 owner 分组传播及可信重绑已补；其他共享对象、多玩家、跨 Grant 及跨 authority 全局准入/执行屏障待验 |
 | 全账本生命周期 | 活跃回执、控制回执、幂等 tombstone、容量拒绝与长期清理 | 关闭会话消息回执、Relay 载荷和关闭游戏 journal 已有模型；活跃及其余控制账本待验 |
 | Relay 长期运行和重新配对 | 旧配对/旧凭据隔离、保留期、多人公平性 | 已补关闭清理与代次隔离；[现有 Relay 动态轮换](RELAY_ROTATION_PROOF.md) 已覆盖 wire 接入、有界旧回执、新同意与故障恢复；未知查证收敛、真实防回滚和多人公平性待验 |
 | 资源配置扩展 | preinstalled、格式/沙箱、缓存长期回收 | manifest、精确预装目录及关闭会话缓存 GC 已有；活跃/跨会话共享缓存、目录/回执回收及更多格式配置待验 |

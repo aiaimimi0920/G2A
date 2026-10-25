@@ -10,6 +10,10 @@
 
 [test_design_conformance.py](../../tests/test_design_conformance.py) 检查本表与目录恰好一一
 对应，并核对 unified 集合等于代码声明；这个静态检查不能证明表中的语义描述正确。
+另有 [共享 Grant 候选装配](SHARED_GRANT_PROOF.md)，复用上述操作验证单 owner 多会话
+原子撤销、邀请/加入竞态和独立读权；它未替换 unified 的固定单会话 profile，另计候选字节证据。
+其 [跨 authority 分组组合](SHARED_GRANT_FANOUT_PROOF.md) 验证一份 Grant 请求的别名去重、
+组 unknown/ACK 和独立 owner 恢复重绑；不增加公开操作，不代表跨 Grant 全局屏障。
 跨语言客户端实际调用 38 项，见 [回执汇总验证](OPERATION_STATUS_PROOF.md)；此前 36 项见 [设备生命周期验证](DEVICE_LIFECYCLE_PROOF.md)。此前 35 项证据在 [Relay 验证](RELAY_PROOF.md)。此前 30 项证据在 [玩家转发验证](PLAYER_FORWARD_PROOF.md)，29 项证据在 [隐私通道验证](PRIVACY_PROOF.md)，27 项证据在 [本地启动验证](LAUNCH_PROOF.md)；26 项/25 项/23 项/20 项/13 项证据分别保留在 [资源准备验证](ASSET_PROOF.md)、[呈现设备验证](PRESENTATION_PROOF.md)、[恢复与转移验证](CONTROL_PROOF.md)、[准入验证](ADMISSION_PROOF.md) 与 [统一会话验证](UNIFIED_SESSION_PROOF.md)。
 
 ## 1. 全操作证据与缺口

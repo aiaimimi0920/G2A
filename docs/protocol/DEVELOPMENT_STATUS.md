@@ -1,6 +1,23 @@
 # 协议开发交付台账
 
-最新增量：[动态撤权目录与同 authority 多会话](FANOUT_CATALOGUE_PROOF.md)。明确目录版本与冻结
+最新增量：[共享 Grant 与跨 authority fanout 组合](SHARED_GRANT_FANOUT_PROOF.md)。按可信 owner、
+Grant/Scope/实例/玩家分组，一份冻结请求、组 unknown/ACK，明确整个 Grant 的影响范围；
+同名独立 owner 不合并，非 Grant 撤销仍按会话独立。独立 owner 重启后经可信锚点重绑，
+支持跳代恢复，旧端口和仅同 UUID 的伪后继拒绝；活动 Grant 不接受同 revision 伪 ACK。
+新增 15 个模型与 1 个严格门禁方法，候选互通 48 次请求/108 次夹具命令；预期全套 861。
+正式 38 项/503 次 wire 和已有共享 Grant 64/137 分开计数，不宣称全局原子撤销。
+
+此前增量：[同一 Grant 的多会话授权域](SHARED_GRANT_PROOF.md)。唯一 canonical Grant owner
+复用会话/动作/事件模型，补真实邀请与 session.join、pending 槽位、Grant 单次原子撤销、
+独立 session/CAS/读权、世界效果保留和可信恢复。新增 31 个模型与 1 个严格门禁测试；
+候选 JS/Python 64 次请求/137 次夹具命令，覆盖三个撤销故障窗口、未知查证和兄弟端口回执。
+补满 outbox 嵌套事务引用及旧 ActionHarness 绕过 owner 的实际反例；最外层统一提交，
+受控内部动作端口也检查生命周期并拒绝绕过 owner；成功 wire 提交保留原 world/owner 锁，
+补取消/结果提交三种故障条件与重启重放。正式操作仍为 38 项/503 次 wire；
+预期全套 845 个测试方法，最终结果以本轮回执为准。互通采用有界嵌套预算并保留超时证据。
+固定预批准单 Grant 不等于多玩家/多 offer 准入，跨 Grant 与跨 authority 全局屏障仍待验。
+
+此前增量：[动态撤权目录与同 authority 多会话](FANOUT_CATALOGUE_PROOF.md)。明确目录版本与冻结
 选集；未决引用阻止退休，墓碑禁止旧身份复活，已确认历史操作不依赖退休端口。新增 15 个
 模型测试，含两种退休提交故障、恢复、容量满时控制可用性和同 authority 独立会话读权。
 候选 JS/Python 新增 10 次请求/56 次夹具命令，累计 28/119；新增严格动态链门禁。
