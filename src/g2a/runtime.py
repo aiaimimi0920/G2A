@@ -11,6 +11,8 @@ import uuid
 
 from jsonschema import Draft202012Validator, SchemaError
 
+from .authority import require_message_role
+from .action_policy import checked_constraints, permits
 from .validation import ProtocolError, validate
 
 
@@ -56,6 +58,7 @@ class Session:
     events: deque = field(default_factory=lambda: deque(maxlen=256))
     accepted: dict = field(default_factory=dict)
     actions: dict = field(default_factory=dict)
+    action_constraints: dict = field(default_factory=dict)
 
 
 class GameHost:
@@ -79,9 +82,12 @@ class GameHost:
             return fingerprint(dict(descriptor=self.descriptor, revision=self.revision))
 
     def invite(self, agent_id, player_id, *, team=(), allowed_actions=(), ttl=120,
-               expected_state=None, expected_request=None):
+               expected_state=None, expected_request=None, action_constraints=None):
         """由宿主在用户确认或既有自动加入授权之后调用，不能由 Agent 自授。"""
         with self.lock:
+            allowed_actions = set(allowed_actions)
+            constraints = checked_constraints(
+                {} if action_constraints is None else action_constraints, allowed_actions)
             if expected_state is not None and expected_state != self.authorization_state():
                 raise ProtocolError("approval_stale", "Game conditions changed after approval", 409)
             if len(self.invitations) >= 256:
@@ -98,7 +104,7 @@ class GameHost:
             self.invitations[token] = dict(agent=agent_id, player=player_id, team=set(team) | {player_id},
                                            permissions=set(allowed_actions), expires=self.clock() + ttl,
                                            session=None, fingerprint=None, expected_state=expected_state,
-                                           expected_request=request_mark)
+                                           expected_request=request_mark, action_constraints=constraints)
             return token
 
     def join(self, token, request):
@@ -143,11 +149,29 @@ class GameHost:
                         invitation["team"], permissions, policy, deepcopy(selected), request["desktop_visible"],
                         request["desktop_visible"] if presentation == "coexist" else False, self.clock())
             self.sessions[s.id] = s
+            s.action_constraints = deepcopy(invitation["action_constraints"])
             invitation.update(session=s.id, fingerprint=mark)
             return self._joined(s)
 
     def _joined(self, s):
         return dict(session=self.snapshot(s), session_token=s.token, lease_seconds=self.lease_seconds)
+
+    def restrict_action(self, session_id, action, parameters):
+        """Trusted game-local tightening only; no remote/self-grant API.
+
+        Pending requests are checked again at claim. Executing effects are not
+        rolled back; the game must check world conditions at its effect boundary.
+        """
+        with self.lock:
+            s = self.sessions.get(session_id)
+            if s is None:
+                raise ProtocolError("session_closed", "Session is not active", 409)
+            self._tick(s)
+            if s.state != "active":
+                raise ProtocolError("session_closed", "Session is not active", 409)
+            constraint = checked_constraints({action: parameters}, s.permissions)[action]
+            previous = s.action_constraints.get(action, True)
+            s.action_constraints[action] = {"allOf": [previous, constraint]}
 
     def snapshot(self, s):
         return dict(id=s.id, state=s.state, game_id=self.descriptor["game_id"], agent_id=s.agent,
@@ -253,10 +277,7 @@ class GameHost:
                 raise ProtocolError("permission_denied", "Sender not a game participant", 403)
             if kind != "chat.message" and role == "game" and sender != self.descriptor["game_id"]:
                 raise ProtocolError("permission_denied", "Game authority required", 403)
-            if kind in {"game.context", "capability.update", "action.result"} and role != "game":
-                raise ProtocolError("permission_denied", "Game authority required", 403)
-            if kind in {"action.request", "action.cancel"} and role != "agent":
-                raise ProtocolError("permission_denied", "Agent role required", 403)
+            require_message_role(kind, role)
             provenance = data.get("provenance")
             if provenance and provenance["player_id"] != s.player:
                 raise ProtocolError("permission_denied", "Provenance belongs to a different player", 403)
@@ -284,6 +305,8 @@ class GameHost:
                 definition = self.capabilities[data["action"]]
                 if not Draft202012Validator(definition["parameters"]).is_valid(data["arguments"]):
                     raise ProtocolError("invalid_arguments", "Action arguments do not match capability schema")
+                if not permits(s.action_constraints, data["action"], data["arguments"]):
+                    raise ProtocolError("permission_denied", "Action is outside the game's local grant", 403)
                 s.actions[message["id"]] = dict(state="pending", action=data["action"], revision=self.revision,
                     arguments=deepcopy(data["arguments"]), deadline=self.clock() + definition["timeout_ms"] / 1000,
                     cancel_requested=False)
@@ -320,5 +343,7 @@ class GameHost:
                 raise ProtocolError("not_executable", "Action is not pending in an active session", 409)
             if action["cancel_requested"] or action["revision"] != self.revision or action["action"] not in s.permissions & self.capabilities.keys():
                 raise ProtocolError("not_executable", "Action requires renewed permission or was cancelled", 409)
+            if not permits(s.action_constraints, action["action"], action["arguments"]):
+                raise ProtocolError("not_executable", "Action is outside the game's current local grant", 409)
             action["state"] = "executing"
             return deepcopy(action)
