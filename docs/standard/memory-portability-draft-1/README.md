@@ -1,6 +1,6 @@
 # Companion memory portability: candidate contract
 
-Status: **draft candidate, not a released wire profile**. Implements a bounded technical proposal for G2A review r34 §9.7 and §18. It adds no core operation and changes no SDK behavior. EN and Chinese files carry the same requirements. Cross-provider identity mapping, transport authentication and permission-policy registries remain candidates requiring review; JSON validation cannot grant authority.
+Status: **draft candidate, not a released wire profile**. This bounded technical proposal originated under review r34 §§9.7 and 18. The current r71 review entry is [§15.7, Player-initiated companion-memory portability](../G2A_SPECIFICATION.md#157-player-initiated-companion-memory-portability); this directory remains supporting material and does not supersede r71. It adds no core operation and changes no SDK behavior. EN and Chinese files carry the same requirements. Cross-provider identity mapping, transport authentication and permission-policy registries remain candidates requiring review; JSON validation cannot grant authority.
 
 ## 1. Scope and artifacts
 

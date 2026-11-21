@@ -4,6 +4,12 @@ Game-to-Agent：游戏与玩家伙伴 Agent 的独立双向交互协议。当前
 
 仓库：https://github.com/aiaimimi0920/G2A 。任何游戏和 Agent 均可实现，不依赖 Mot 账号、服务器、模型、记忆服务或主仓库。聚焦伙伴身份，不扩展为游戏所有 NPC 的通用智能化系统。
 
+## 独立规范审计 / Independent specification review
+
+先读 r71 工作草案：[English master](docs/standard/G2A_SPECIFICATION.md) · [完整中文版](docs/standard/G2A_SPECIFICATION.zh-CN.md) · [审计导航](docs/standard/README.md)。`0.1.0-dev` 是下方参考宿主的旧实验线协议；r71 是独立规范审查草案，不是已发布线协议，也不代表 SDK 已符合规范。
+
+## 参考实现与历史设计
+
 - [已确认方向与待讨论边界](docs/DESIGN.md)
 - [协议设计完整性梳理与决策队列](docs/DESIGN_COMPLETENESS.md)
 - [下一版协议总设计与全流程伪代码](docs/protocol/README.md)
