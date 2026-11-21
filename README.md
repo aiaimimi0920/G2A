@@ -8,6 +8,7 @@ Game-to-Agent：游戏与玩家伙伴 Agent 的独立双向交互协议。当前
 - [协议设计完整性梳理与决策队列](docs/DESIGN_COMPLETENESS.md)
 - [下一版协议总设计与全流程伪代码](docs/protocol/README.md)
 - [实验性规范](docs/SPECIFICATION.md)
+- [可执行 SDK 的游戏本地感知/行动约束](docs/SDK_GAME_POLICY.md)
 - [完整目标与实施台账](docs/IMPLEMENTATION_PLAN.md)
 - [参考 A2A 的对外发布路线](docs/PUBLISHING.md)
 - [本地发现与连接授权草案](docs/CONNECTIONS.md)
