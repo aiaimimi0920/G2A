@@ -4,7 +4,7 @@
 
 An open protocol defining identity, observation, authorization, and action boundaries among games, players, and AI agents.
 
-Status: Working Draft for Public Review. Editorial revision: `standard-review-2026-11-22-r73`. Revision date: November 22, 2026.
+Status: Working Draft for Public Review. Editorial revision: `standard-review-2026-11-22-r74`. Revision date: November 22, 2026.
 Design baseline: `g2a-design-1`. Candidate profiles: `observations-draft-1`, `g2a-http-json/draft-1`.
 This document defines target standard semantics for review; it does not allocate a frozen production wire version or certify existing SDK implementations.
 
@@ -714,7 +714,8 @@ Player settings for a companion's personality and speaking style override confli
 
 - **Player Inspection and Autonomous Maintenance:** Service providers MUST allow players to view, edit, pin/lock, and delete their retained companion long-term memories, propagating completed edits/deletions across provider caches and indexes (`privacy.request` / `privacy.receipt` report any legal/technical exceptions). Within the player's configured retention policy, a companion MAY autonomously organize memories and compact/delete unpinned raw records without per-deletion approval prompts, provided it NEVER overwrites explicit player edits, deletes player-pinned records, or silently resurrects deleted items via stale caches.
 - **Epistemic Provenance:** Stored and exported records MUST distinguish event time from storage/import time, and separate direct observations, player statements, derived inferences/summaries, player edits, and future intentions (marking deleted upstream sources with source-unavailable tombstones rather than fabricating certainty).
-- **Complete Open-Format Portability:** Providers MUST offer player-initiated, complete export and selective import of retained companion memories (both raw retained experiences and consolidated summaries) alongside player-selected persona, speaking style, and global autonomy settings in an open, versioned schema (see candidate fixture in [memory-portability-draft-1](memory-portability-draft-1/README.md)). Switching providers NEVER triggers automatic memory disclosure. Importers MUST return truthful per-record receipts (`imported`, `transformed`, `rejected`, `unresolved`) without claiming identical model weights or behavior.
+- **Complete Open-Format Portability:** Providers MUST offer player-initiated, complete export and selective import of retained companion memories (both raw retained experiences and consolidated summaries) alongside player-selected persona, speaking style, and global autonomy settings in an open, versioned schema (see candidate fixture in [memory-portability-draft-1](memory-portability-draft-1/README.md)). The player MUST explicitly choose the destination provider and import scope. The source and receiving providers MUST verify that authorization, respect the selected scope, and preserve applicable provenance and access, retention, and disclosure constraints. Import MUST NOT expand what may be disclosed to a game or any other recipient. Switching providers MUST NOT automatically disclose memory. Importers MUST return truthful per-record receipts (`imported`, `transformed`, `rejected`, `unresolved`).
+- **Migrated Companion Settings:** The receiving provider MUST preserve the player's selected settings where supported and truthfully report which selected settings are unsupported, transformed, or otherwise not applied. Export alone is not proof that a setting was applied. Migration does not transfer model weights or guarantee identical model behavior: different models MAY express the same settings differently.
 
 <a id="section-16"></a>
 
@@ -902,7 +903,7 @@ Reading untrusted external text neither revokes valid player purchase budgets no
 
 | Artifact | Current Identifier | Normative Role |
 | --- | --- | --- |
-| Bilingual Specification | `standard-review-2026-11-22-r73` | Public-review specification draft (not a wire protocol version string). |
+| Bilingual Specification | `standard-review-2026-11-22-r74` | Public-review specification draft (not a wire protocol version string). |
 | Core Design Contracts | `g2a-design-1` | Machine-checked baseline schemas, 38-operation fixture set, and canonical codec. |
 | Observation Profile | `observations-draft-1` | Candidate structured/multimodal observation stream and `observation.query` contract. |
 | HTTP/JSON Binding | `g2a-http-json` / `draft-1` | Candidate single-endpoint HTTP/JSON + optional SSE/WebSocket mapping. |
@@ -938,7 +939,7 @@ A conformance statement declares the exact protocol version, implementation buil
 | `CONF-10` | Runtime Caps & NPC Cost Ownership (§16.2) | Metered services, NPC games | Estimates vs. measured usage, reservations, and cap-triggered companion pause while gameplay continues; mandatory owning-player/room-host payer binding per active independent AI NPC with zero implicit splitting to other players. |
 | `CONF-11` | Store & Purchase Budgets (§17.1) | `store` | Structured prices/units, stage eligibility, price-change re-consent, declared recommendation rate-limiting and session rate reduction upon repeated explicit opposition; authoritative purchase-budget ledger with concurrency reservations, timeout retention, and exclusion of real money/external wallets/high-value account assets. |
 | `CONF-12` | Appearance & Gameplay State (§§16.4, 17.2) | `avatar` / `presentation` | Three-tier priority (`player forced` > `game-default` > `companion-default`); explicit notice & labeled fallback/reselection on format mismatch; game injury/death enforcement without cross-game identity/memory mutation. |
-| `CONF-13` | Memory, Timelines & Portability (§15) | Memory providers / Agents | NPC vs. player-companion memory separation; monotonic `save_epoch` on reload, pre-inference timeline filtering vs. labeled prior-branch recall, and independent soft spoiler/confidentiality limits; player view/edit/pin/delete and autonomous compaction respecting pinned/edited records; complete open-format export and truthful `imported`/`transformed`/`rejected`/`unresolved` receipts. |
+| `CONF-13` | Memory, Timelines & Portability (§15) | Memory providers / Agents | NPC vs. player-companion memory separation; monotonic `save_epoch` on reload, pre-inference timeline filtering vs. labeled prior-branch recall, and independent soft spoiler/confidentiality limits; player view/edit/pin/delete and autonomous compaction respecting pinned/edited records; complete open-format export; player-selected migration destination and import scope; preserved provenance and permissions without broader disclosure; truthful `imported`/`transformed`/`rejected`/`unresolved` receipts; selected supported settings preserved, with unsupported, transformed, or otherwise unapplied settings truthfully reported. |
 | `CONF-14` | Prompt Injection & Privacy Receipts (§§4.4, 15, 19) | All participants | Paired benign vs. prompt-injected inputs across dialogue, items, store copy, and memory (measuring both legitimate task utility and zero unauthorized grant/budget/audience mutation); planning-only data isolation; truthful custodian `privacy.receipt` verification. |
 
 ### 21.3 Reproducible Agent-Quality Evaluation
@@ -949,7 +950,7 @@ Optional quality benchmarks accompanying conformance reports MUST disclose game 
 
 ## 22. Baseline Alignment and Migration Notes
 
-| Repository Artifact / Baseline Concept | Standard Specification Treatment (`r73`) |
+| Repository Artifact / Baseline Concept | Standard Specification Treatment (`r74`) |
 | --- | --- |
 | `g2a-design-1` `Descriptor` / `Scope` / `Envelope` | Canonicalized in Section 5.2; `Scope.extensions` freezes session config while `Envelope.extensions` stays lightweight (`{}`). |
 | `g2a-design-1` `core.events` including `chat.send` | Decoupled in Section 3.3/Section 6 so `chat` (`chat.send`, `player_chat.forward`) is optional for non-chat games; legacy `g2a-design-1` fixtures map `chat` onto `core.events`. |
@@ -1012,6 +1013,7 @@ Repository design & research records: [PROTOCOL.md](../protocol/PROTOCOL.md), [O
 | `standard-review-2026-11-14-r71` | 2026-11-14 | Synchronized review baseline committed in `81cb489eccecf538af697ddacd90d5e89436a7ba`. |
 | `standard-review-2026-11-22-r72` | 2026-11-22 | Mechanism, role-coexistence, two-tier recovery, multimodal split, and `CONF-01`–`CONF-14` matrix update committed in `6ab2d2ee1463c4c43318a339c77140333db7adf6`. |
 | `standard-review-2026-11-22-r73` | 2026-11-22 | Public-standard structural overhaul summarized in Section 25.1; retains working-draft status without allocating a production wire version. |
+| `standard-review-2026-11-22-r74` | 2026-11-22 | Restores explicit consent scope, permissions preservation, and settings handling for companion-memory migration (§15.7 and `CONF-13`). No wire or SDK change. |
 
 ### 25.1 Changes in r73
 
