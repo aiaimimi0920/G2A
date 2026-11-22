@@ -4,7 +4,7 @@
 
 Defining information, authorization and action boundaries among the game world, players and AI Agents playing Game Companions.
 
-Status: Working Draft for Review. Editorial revision: `standard-review-2026-11-14-r71`. Revision date: November 14, 2026.
+Status: Working Draft for Review. Editorial revision: `standard-review-2026-11-22-r72`. Revision date: November 22, 2026.
 Baseline: `g2a-design-1`. Observation profile (a specified capability subset and its contracts) candidate: `observations-draft-1`.
 This document does not assign a released wire version, certify an SDK, or claim production interoperability.
 
@@ -100,9 +100,13 @@ The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, and MAY are normativ
 
 This English master, `G2A_SPECIFICATION.md`, is the primary semantic review reference. In the inherited `g2a-design-1` baseline, language-independent machine contracts are defined in [contracts.schema.json](../protocol/contracts.schema.json) and [operations.json](../protocol/operations.json); [contracts.py](../protocol/contracts.py) supplies corresponding Python reference type bindings. Existing state machines and processing rules from creation to termination are in [PROTOCOL.md](../protocol/PROTOCOL.md), [OPERATION_CONTRACT.md](../protocol/OPERATION_CONTRACT.md), and [STATE_TRACES.md](../protocol/STATE_TRACES.md). This draft adds observation semantics (`observations-draft-1`) and clarifies gameplay-role applicability and companion governance. Existing JSON being able to carry fields does not establish implementation or interoperability of those additions. Remaining discrepancies MUST be reconciled under section 20; the standard MUST NOT be inferred solely from reference bindings.
 
-Within this review draft, explicit candidate changes describe the proposed target behavior, not a retroactive change to the inherited baseline. An implementation MUST identify which baseline and candidate profiles it implements; support for one MUST NOT be presented as conformance to the other. Unresolved wire encodings remain release blockers even when the intended behavior is specified.
+Within this review draft, explicit candidate changes describe target standard behavior rather than retroactive edits to the inherited `g2a-design-1` baseline or `0.1.0-dev` SDK. To keep individual clauses concise, the following rules apply globally without being repeated in every section:
 
-Release-freezing and schema-validation requirements are collected in section 20. They remain normative; their placement there lets readers first follow the interaction model.
+- Candidate field names, profile rules and binding mappings become wire-interoperable only when pinned in a release manifest with schemas and test vectors under section 20;
+- Defining semantic or profile behavior in a clause does not silently register unadvertised core operations or certify existing SDKs, models or adapters;
+- An implementation MUST declare the exact baseline and candidate profiles it supports and MUST NOT present support for one as conformance to another.
+
+Release-freezing and schema-validation requirements are collected in section 20 and remain normative.
 
 <a id="section-3"></a>
 
@@ -145,11 +149,9 @@ The Game Interaction Node and Game Agent handle their communication, user author
 | Chat | Specify the audience and source of messages and how they may be forwarded and retained. |
 | Presentation or asset delivery | Manage only the negotiated rendering or resource lifecycle, including creation, use and termination. |
 
-Chat, assets, presentation, active sensing and durable resume are not mandatory for all participants merely because this document defines them. Being optional does not permit an implementation to ignore their rules when it uses them.
+Chat, assets, presentation, active sensing and durable resume are optional capabilities rather than universal entry prerequisites, though any participant adopting an optional capability MUST follow all of its applicable rules. Player-facing chat (`chat.send`, `player_chat.forward`) is decoupled as an optional `chat` capability so tactical, board or action games without text chat can implement `core.events` purely for event and observation delivery; compatibility with the inherited `g2a-design-1` bundling is recorded in section 22.
 
-Optional player-facing chat use does not waive the text/event contracts of an implementation claiming the inherited `g2a-design-1` `core.events` feature. The existing catalogue does not define a separate optional chat feature. Any future profile that separates those operation requirements MUST explicitly define and version that applicability mapping; it cannot silently change the inherited minimum.
-
-Operation catalogue labels such as `core.session` group operations; they do not require every participant to implement every operation in that group. A release MUST publish which operations apply to each role when each feature is used.
+Operation catalogue labels such as `core.session` group operations logically rather than requiring every role to implement every operation in that group. A release MUST publish the exact role-by-capability operation matrix.
 
 ### 3.1 Reading order and requirement applicability
 
@@ -175,13 +177,11 @@ Use the following reading order, or go directly to the part you are implementing
 
 **A requirement applies because of a participant's responsibilities and the stated conditions, not because of its position in the document.** For example:
 
-- A participating game has to provide the companion slot required by section 13.2, but a player may leave it empty.
-- Companion requirements apply when the role or capability is used; independent AI NPC support remains optional.
-- Optional features still follow applicable core, role, privacy and lifecycle rules.
+- A participating game exposes its declared gameplay-role slots under section 13.2; where a player-companion slot is offered, a player may leave it empty.
+- Companion or independent AI NPC requirements apply when the corresponding role or capability is used.
+- Optional features remain bound by applicable core, role, privacy and lifecycle invariants.
 
-The responsibility tables and each section's stated conditions determine applicability. Rearranging the reading order does not add or remove requirements.
-
-This specification borrows A2A's separation of models, operations and transport bindings, not its wire format or operation names, and does not claim A2A compatibility. This document structure does not itself require new SDK code or additional transports.
+The responsibility tables and each section's stated conditions determine applicability. This specification adopts a clean separation of data models, abstract operations and transport bindings (comparable to A2A architecturally, without wire compatibility or shared authorization semantics).
 
 <a id="section-4"></a>
 
@@ -308,6 +308,8 @@ Each object has a distinct purpose:
 
 Unless their definitions say otherwise, identifiers MUST be opaque to consumers: a consumer cannot parse them to infer identity, permission or meaning. Correlation IDs, message IDs, operation IDs, event cursors and action IDs have different purposes and MUST NOT be substituted for each other.
 
+Because the canonical JSON encoding (`g2a-cjson-1`, section 18) prohibits floating-point numbers to guarantee cross-language digest determinism, continuous gameplay quantities (such as spatial coordinates, velocities, angles, durations and probabilities) MUST be represented using explicitly declared integer units or fixed-point scales — for example, integer milliseconds (`_ms`), integer millimeters/micrometers, basis points (`_bps` in `0..10000` for ratios or probabilities), or explicitly typed decimal strings where unbounded precision is required. Schemas MUST declare the unit and scale factor; implementations MUST NOT transmit raw IEEE-754 floats on a `g2a-cjson-1` wire.
+
 The following invariants apply:
 
 1. Effective authority MUST NOT exceed the intersection of current game capabilities, approved grant, session scope, membership, and current policy.
@@ -325,7 +327,7 @@ The following invariants apply:
 
 ## 6. Abstract operation catalogue
 
-The table focuses on abstract operations used for game interaction and declared gameplay-facing capabilities: what can be called, by whom, and with what guarantees. It does not prescribe a transport. Exact fields and the inherited baseline’s complete operation inventory remain in the linked machine contracts. This table does not redefine that complete baseline or claim that implementation-related operations omitted here have been removed from existing contracts. The specification scope and machine contracts MUST be reconciled under section 20 before a frozen release. A frozen publication MUST include an English field reference generated from the agreed contracts. An implementation takes on the operation requirements applicable to its roles and capabilities in use; the table does not require every participant to implement every operation.
+The table defines the abstract operations for admission, session control, observations, actions, chat and optional capabilities: what can be called, by whom, and with what guarantees, independent of transport. Exact field schemas and retry families in the inherited baseline are in [contracts.schema.json](../protocol/contracts.schema.json) and [operations.json](../protocol/operations.json); `observation.query` is introduced as the candidate read operation for section 9.6, and transport-specific outbound relay operations (`relay.register`, `relay.call`, `relay.pull`, `relay.reply`, `relay.revoke`) remain scoped to relay bindings (section 18) rather than gameplay logic. An implementation implements only the operations applicable to its declared roles and negotiated capabilities.
 
 | Operation | Applicable role/capability | Required semantics |
 | --- | --- | --- |
@@ -343,13 +345,14 @@ The table focuses on abstract operations used for game interaction and declared 
 | session.handoff | Handoff | Transfer eligible control with generation fencing |
 | session.claim_control | Negotiated handoff participant | Claim handed-off control under the handoff capability, lease and generation rules; not a general session control permission |
 | operation.get | Recoverable-operation participant | Reconcile the original authorized operation result |
-| chat.send | Chat participant | Send with source, audience and retention constraints |
-| action.request | Action participant | Submit one typed and scoped action identity |
-| action.cancel | Action participant | Request cancellation without implying rollback |
+| observation.query | Observation query capability (candidate) | Perform a stateless, authorized read of current observation records without world side effects or lease renewal |
+| chat.send | Optional `chat` capability | Send with source, audience and retention constraints |
+| player_chat.forward | Optional `chat` capability (authorized forwarder) | Forward player speech without misattribution |
+| action.request | Action participant | Submit a typed, scoped action request; returns `confirmation_required` challenge if policy demands unobtained confirmation |
+| action.cancel | Action participant | Request cancellation of pending or cancellable executing work without implying rollback |
 | action.query | Action participant | Return authorized current state and effect accounting |
-| action.confirm | Confirming authority | Confirm the exact eligible action and constraints |
+| action.confirm | Confirming authority (`PlayerConsent`) | Confirm an exact proposed action digest, material terms and expiry |
 | context.publish | Game/context source | Publish only authorized provenance-bound context |
-| player_chat.forward | Authorized forwarding source | Forward player speech without misattribution |
 | capability.replace | Capability authority | Replace capability revision and invalidate affected work |
 | membership.replace | Membership authority | Replace members and invalidate affected disclosures/control |
 | permission.revoke | Grant authority | Revoke and order affected reads/effects/leases |
@@ -363,8 +366,7 @@ The table focuses on abstract operations used for game interaction and declared 
 | privacy.request | Data subject | Ask the party actually retaining the relevant data to perform supported, authorized data handling |
 | privacy.receipt | Data subject | Query the original request's actual processing status and retention exceptions; the caller does not write the receipt |
 
-
-For the privacy operations, the party actually retaining the relevant data receives and processes the request and returns its actual status. The data subject invokes the query; a caller-supplied claim of deletion is not a receipt issued by the party that actually processed the data.
+For privacy operations, the party actually retaining the relevant data processes the request and issues the authoritative status; a caller's unilateral claim of deletion is not a receipt.
 
 <a id="section-7"></a>
 
@@ -405,7 +407,11 @@ An invitation is redeemed by its intended authenticated party; possession of an 
 
 **Where extensions belong**
 
-Extensions use namespaced keys with `{version, required, value}`. Descriptor, Requested and Scope extensions carry support, proposed configuration and approved configuration respectively. Active Envelope extension configuration MUST exactly match the frozen Scope value where the baseline requires it. Dynamic observations belong in message content, not in a mutated configuration value. Data-plane outer OperationRequest extensions remain empty under the inherited contract; message extensions belong in the Envelope.
+Extensions use namespaced keys with `{version, required, value}`. Control-plane negotiation and runtime message envelopes separate static configuration from per-message payloads:
+
+- `Descriptor.extensions`, `Requested.extensions` and `Scope.extensions` carry supported capabilities, proposed parameters and the approved session-frozen configuration (including negotiated category schemas and rate bounds).
+- Once a session is established, its approved extension configuration is bound server-side to `session_id` and `scope_digest`. Data-plane `Envelope.extensions` carries only lightweight per-message extension headers when a profile explicitly requires them (defaulting to `{}`) and MUST NOT require repeating static `Scope.extensions` schemas or catalogues on every message, nor may it mutate frozen `Scope` terms.
+- Dynamic observations belong in `Context.content`, and outer `OperationRequest.extensions` on data-plane calls MUST remain empty so message digests cover all active metadata.
 
 <a id="section-8"></a>
 
@@ -460,15 +466,11 @@ The candidate uses the existing `game.context` `content` field rather than intro
 | Agreed configuration | Scope extensions |
 | Changing observation records | Context content |
 
-Temporary examples use `org.example.g2a-observations`; this is an illustrative namespace, not a registered official identifier. There is no new core subscribe operation in this draft: existing context publishing, events and snapshots transport the negotiated profile. The selected category set is frozen until renegotiation.
-
-**When candidate structures become binding**
-
-Any machine-contract refinement MUST map to this content slot, the inherited operation envelopes and the existing stream/epoch/revision identities before being claimed interoperable. Candidate names such as ObservationCursor, ObservationEnvelope, TimelineCoordinate and ActionRequestEnvelope do not register new core objects or operations by themselves. Their normative source, exact types, applicability, references and compatibility rules must first be fixed under section 2; an unreferenced Schema definition does not constrain an operation.
+Temporary examples use `org.example.g2a-observations` as an illustrative namespace. Existing context publishing (`context.publish`), events (`session.events`), snapshots (`session.snapshot`) and candidate stateless reads (`observation.query`) transport the negotiated profile without requiring a separate subscribe/unsubscribe state machine; the selected category set remains frozen until renegotiation.
 
 ### 9.2 Candidate content model
 
-The following is an illustrative `Context.content` fragment, not a complete message or an assertion that the existing schema validates the observation semantics:
+The following is an illustrative `Context.content` snapshot payload (`declared-digest` is a placeholder):
 
 ```json
 {
@@ -488,15 +490,13 @@ The following is an illustrative `Context.content` fragment, not a complete mess
 }
 ```
 
-`declared-digest` is a placeholder, not a valid wire digest. For this illustration only, the two timestamps are UTC Unix-epoch milliseconds one second apart; production clock-domain, uncertainty and skew assumptions MUST be supplied by the negotiated profile or enclosing context under section 9.4. The instance/session binding, observation-category definition and authorization context are omitted here, not waived. This fragment is not a conformance vector and MUST NOT be copied as a production payload without those definitions and valid digests.
+Clock-domain, uncertainty and skew assumptions MUST be supplied by the negotiated profile or enclosing context under section 9.4. `mode` has three values:
 
-`mode` has three possible values:
+- `snapshot`: replaces the complete authorized view of `stream_id` and binds `(category, perspective, schema_version, schema_digest, definition_digest)` for the active `(world_epoch, visibility_epoch)`.
+- `delta`: applies incremental changes relative to `base_revision` within the same `(stream_id, world_epoch, visibility_epoch)`, carrying upserted `records` and/or `remove_ids` (with optional per-record transition metadata). Once a `snapshot` has bound the stream's schema and perspective for that epoch, `delta` frames MAY omit redundant `schema_digest` and `definition_digest` fields.
+- `retract`: withdraws either an explicit `record_ids` subset or the entire stream (when `record_ids` is omitted) within `(stream_id, world_epoch, visibility_epoch)`, clearing actionable state without asserting in-world destruction.
 
-- `snapshot`: the complete authorized view of the stream.
-- `delta`: changes relative to a specified revision. It additionally has `base_revision` and MAY carry `records` and `remove_ids`.
-- `retract`: withdrawal of information within a removal scope defined by the profile's exact schema.
-
-Records have stable IDs within their declared epoch. Revisions are strictly increasing per stream epoch, but need not be contiguous. A numerical gap alone does not prove loss. A delta is applicable only if its base_revision exactly matches the consumer's current revision and its identity, schema, world, visibility and perspective context match.
+Records have stable view-local IDs within their declared epoch. Revisions strictly increase per stream epoch, though numerical gaps alone do not prove data loss. A `delta` is applicable only when `base_revision` matches the consumer's current revision and its stream, epoch, perspective and schema bindings match.
 
 **Identifying an observation**
 
@@ -550,37 +550,27 @@ Active sensing that changes the world, consumes a game resource or creates a new
 
 An event's identity and source, its ordering position, an observation's revision and an action's identity serve different purposes and MUST NOT be conflated. An applicable event binding MUST define stable identity and authenticated source, event type, schema version and correlation context; timestamps alone MUST NOT determine ordering or authorization. Event delivery does not imply that the Agent has observed an effect or that the referenced action succeeded. These envelope requirements do not require storing or replaying all disconnected gameplay under section 14.2.
 
-### 9.5 Structured foundation and multimodal Agents
+### 9.5 Structured foundation and multimodal capabilities
 
-This protocol supports structured game information and optional visual/audio observations. Structured information is the foundation, not an optional alternative to media. A game-facing Agent admitted for gameplay assistance MUST be capable of interpreting the applicable baseline structured game information and using it to make gameplay decisions within its authorized role. An Agent that can only converse or inspect screenshots, but cannot use the negotiated structured foundation, does not meet this minimum gameplay-Agent capability. This requirement applies to Agents making gameplay decisions, not facilities that only transport network messages.
+G2A requires structured game information (`perception.structured`) as the mandatory foundation for gameplay Agents, with game visual perception (`perception.visual`) and game-environment audio perception (`perception.audio`) defined as independent optional capabilities. A game-facing Agent admitted for gameplay assistance MUST interpret the applicable baseline structured game information and make decisions within its authorized role; an Agent that can only converse or inspect raw screenshots without using the negotiated structured foundation does not meet the minimum gameplay-Agent standard.
 
-**Advanced capabilities build on the structured foundation**
+**Orthogonal visual and audio capabilities**
 
-An advanced Agent builds on that foundation and can additionally interpret both game images and game audio. Media support neither replaces the foundation nor grants access to a raw desktop, microphone or hidden game information.
+Multimodal capabilities build on the structured foundation rather than replacing it, and are negotiated independently: an Agent MAY support `perception.visual`, `perception.audio`, or both. Neither capability grants access to the raw OS desktop, player microphone or hidden game state.
 
-Games MUST declare the structured categories and media capabilities they provide; Agents MUST truthfully declare supported schemas and media formats. Actual media delivery remains optional and requires compatible negotiated capabilities and applicable authorization, perspective, audience and resource constraints. A game without media can still support baseline structured interaction, including with an advanced Agent.
+Games MUST declare the structured categories and any optional visual or audio feeds they expose; Agents MUST truthfully declare supported schemas and media formats for each capability they claim. A game without media feeds remains fully compatible with multimodal Agents operating in structured-only mode.
 
 **Common meanings with game-specific extensions**
 
-Structured information combines common definitions with game-specific extensions: G2A defines common formats for recurring game concepts, while game developers MAY declare extensions for special gameplay. Common definitions MUST retain their standardized meaning; extensions MUST be namespaced, versioned, schema-described and explicitly advertised/negotiated under the applicable rules, without silently redefining a common field.
-
-Common fields standardize meaning and format, not universal availability.
-
-A game is not required to provide a field that is inapplicable to its gameplay or not permitted for disclosure to the requesting role. The game MUST NOT fabricate missing data, fill it with misleading defaults, or expose protected information merely to satisfy a common schema. It MUST distinguish an unavailable or unsupported value from a known empty or false value, while respecting hidden-information error boundaries.
-
-Required categories and fields for a particular interaction, optional data and unsupported special mechanics MUST be stated by the applicable profile and negotiated scope. If legitimately unavailable information is required for the proposed interaction, participants MUST refuse that interaction or explicitly agree on a supported scope instead of inventing data or bypassing disclosure authority.
+Structured information combines standardized common concepts with namespaced, versioned, schema-described game extensions. Common fields standardize meaning and format rather than universal availability: a game need not supply fields inapplicable to its gameplay or unauthorized for the requesting role, MUST NOT fabricate misleading defaults or leak protected state to satisfy a schema, and MUST distinguish unavailable/unsupported values from known empty or false values. If legitimately unavailable information is mandatory for a proposed interaction, participants MUST refuse or explicitly agree on a narrowed scope.
 
 **Verifying declared Agent capabilities**
 
-The applicable gameplay profile MUST define the baseline structured categories and schemas; there is no assumed universal list of game facts. Admission MUST check the Agent's ability to interpret the required categories and use them for the intended decisions. Unmet required capabilities MUST lead to refusal or an explicitly agreed supported scope, not a false capability claim.
+Applicable gameplay profiles define the baseline structured categories and schemas. Admission checks that the Agent supports the required structured categories, and conformance evidence MUST demonstrate decision-making from structured inputs plus behavioral understanding for each optional modality (`perception.visual` and/or `perception.audio`) actually claimed — transport or schema parsing alone is insufficient.
 
-Conformance evidence MUST demonstrate structured-input decision behavior and, for an advanced capability claim, interpretation of both images and audio. A catalogue flag, payload transport, schema parsing or model name alone does not demonstrate those behavioral capabilities. Exact media encodings, capability identifiers and acceptance vectors remain to be standardized; this draft does not certify the existing SDK or any model as conforming.
+**Independent player controls for visual and audio feeds**
 
-**The player chooses whether to enable images and audio**
-
-For an advanced Agent, the player decides whether to enable game-image and game-audio perception. The player MAY disable these media inputs and use only structured game information. Advanced capability is not a requirement to consume media.
-
-Enabling media also requires the game's actually declared support and current authorization; a player preference cannot compel an unsupported or undisclosed media feed. Implementations MUST distinguish supported, requested and effectively enabled media capabilities, stop newly disabled media delivery/processing, and truthfully report unsupported requests. These controls govern game-environment perception, not player-companion voice conversation under section 15.5; disabling game audio does not by itself disable spoken communication.
+Where multimodal capabilities are supported, the player independently controls whether to enable game-image perception and game-audio perception, and MAY disable either or both to run on structured information alone. Enabling a feed also requires the game's declared support and current grant. Implementations MUST distinguish supported, requested and effectively active feeds, immediately stop newly disabled media delivery/processing, and keep game-environment audio perception separate from player-companion voice conversation under section 15.5.
 
 ### 9.6 Game push and Agent queries
 
@@ -598,9 +588,7 @@ A profile using push MUST distinguish replaceable state updates from discrete ev
 
 Within declared queue and retention limits, event delivery MUST preserve the declared ordering and duplicate-handling semantics. On overflow, the sender MUST report the applicable gap, resynchronization requirement or failure under section 12.
 
-A fresh baseline restores current state, not lost transient events, and MUST NOT be described as a complete historical replay. This does not authorize retaining disconnected gameplay for later replay contrary to section 14.2.
-
-This section establishes delivery/query semantics without adding an unregistered core operation. Existing context publishing and event delivery can carry push data; exact query capability definitions, schemas and operation mappings MUST be declared by the applicable negotiated profile before interoperability is claimed. Conformance tests MUST cover push-only, query-only and combined declarations, unsupported mechanisms, denied queries, stale results, and scope/frequency enforcement.
+A fresh baseline restores current state, not lost transient events, and MUST NOT be described as a complete historical replay or used to backfill disconnected gameplay contrary to section 14.2. Push delivery uses `context.publish` and `session.events` (with `session.snapshot` for recovery), while stateless Agent pulls map to `observation.query` (section 6) under the negotiated observation profile.
 
 <a id="section-10"></a>
 
@@ -624,15 +612,13 @@ Side effects, reversibility and idempotency MUST be declared as distinct propert
 
 **From request to game effect**
 
-For a new invocation under the inherited baseline, the successful processing path is:
+The processing path from action proposal to world effect separates confirmation gates, queue acceptance, executor claim and effect commitment:
 
-1. Select the action identity and proposed parameters; where required, obtain confirmation bound to that proposal before `action.request` is accepted.
-2. Validate `action.request`, current authority and the exact proposal. Where confirmation is required, acceptance MUST validate and atomically consume it before creating `pending` work.
-3. Have an authorized executor claim the eligible work.
-4. Recheck applicable authority and preconditions at the effect boundary, then produce only permitted game effects.
-5. Record the result and known effects, or preserve explicit uncertainty when the result cannot be established.
-
-Not every action requires confirmation. `action.confirm` does not create an Action record, claim execution or produce a game effect; duplicate accepted requests follow the existing deduplication rules rather than consuming confirmation again. Claiming work prevents competing executors from owning it at the same time; it does not prove that permission is still valid when the effect takes place. Rejection, cancellation and recovery may end or interrupt this successful path according to the state machine below.
+1. **Proposal and confirmation handshake:** The Agent selects a stable `action.request` ID and typed parameters. If the action requires player confirmation (by capability definition, high-value transfer policy in section 16.3.1, irreversible policy in section 16.5, or budget overrun in section 17.1.2) and no valid confirmation is attached yet, submitting `action.request` MUST NOT create executable `pending` work; instead, the node returns a structured `confirmation_required` challenge binding `action_request_id`, parameter and definition digests, material terms/consequences, `expires_at`, and any cooldown window (section 16.6), enabling the authenticated `PlayerConsent` path to prompt the player and record `action.confirm`. When confirmation is pre-obtained or not required, processing proceeds directly to step 2.
+2. **Acceptance:** The node validates `action.request`, current authority and exact digests. Where confirmation applies, acceptance MUST validate and atomically consume the matching unexpired `action.confirm` before creating `pending` work; duplicate accepted requests follow deduplication rules without double-consuming confirmation.
+3. **Executor claim:** An authorized game executor claims eligible `pending` work (`action.claim`), preventing concurrent duplicate execution while rechecking revocations and cancellations.
+4. **Effect-boundary check and execution:** At the moment the world effect is produced, the executor rechecks current authority, player policies and gameplay preconditions, producing only permitted game effects.
+5. **Settlement:** The executor records the terminal result and known effect status (`action.commit_result`), or preserves explicit uncertainty (`unknown` / `undetermined`) when outcome evidence is unavailable.
 
 The final authorization check MUST be coordinated with revocation and the actual effect, so that revocation between a check and execution cannot be ignored. This requires an atomic game operation, a transactional journal, or an equivalent mechanism. Here, atomic means that the related steps complete as an indivisible whole. If atomicity cannot be guaranteed, the implementation MUST document which boundaries require reconciliation and MUST NOT claim exactly-once effects it cannot provide.
 
@@ -665,22 +651,14 @@ If feasibility, success probability or cost estimates are supplied, they MUST id
 
 **Checking the information behind a decision**
 
-Agent inference and network delay can leave the decision context behind the current world. Action requests SHOULD support an authorized observation-baseline reference and typed target-state preconditions. `based_on_observation_id` and `expected_world_revision` are illustrative candidate field names only; exact encodings and mappings to existing operations must be frozen under sections 2, 9.1, 20, not assumed to be existing core fields.
+Agent inference and network delay can leave the decision context behind the current world. Action requests SHOULD support an authorized observation-baseline reference (such as candidate `based_on_observation_id` or `expected_world_revision`) and typed target-state preconditions.
 
 For observation-dependent actions, the applicable profile MUST define:
 
-- how the request identifies the authorized observation context used for the decision;
-- which freshness requirements or game-state preconditions are mandatory.
+- how the request identifies the authorized observation context (preserving section 9 stream, epoch and revision semantics rather than treating a raw timestamp as a baseline);
+- which freshness bounds (including units, authoritative evaluation and uncalibrated-clock handling) or typed, non-executable game-state preconditions are mandatory.
 
-That association MUST preserve the stream, epoch and revision meaning of section 9, rather than treating a timestamp as a baseline.
-
-When an age limit is provided, it MUST define units and authoritative evaluation, including how to handle uncalibrated or unavailable timing. Preconditions MUST be typed and use declared operators and authorized operands, not executable code or a hidden-state query bypass.
-
-The executor MUST reject the affected action before new effects when a required context is invalid, a declared required age limit fails or a required precondition is false or cannot be established. It MUST distinguish stale context from a failed game prerequisite or unavailable evidence through the applicable structured error/result contract, without leaking hidden facts.
-
-For example, if a healing target has died, changed allegiance or no longer meets a declared healing condition, the game MUST reject under the applicable condition rather than proceed merely because the action ID has not executed. The game SHOULD provide an authorized current summary with the rejection or update observations through a negotiated mechanism; deltas still require an exact baseline, and an authorized query may be indicated when push is unsupported. After rejection for stale state or a changed target, the Agent MUST NOT mechanically retry the original parameters and MUST reassess its intent using current authorized observations. Replanning does not waive section 11 reconciliation of an original action whose effects may already have occurred.
-
-Passing these checks does not reserve future state or replace the coordinated effect-boundary check. If effects may already have occurred, the result MUST instead preserve the truthful partial or uncertain outcome under sections 10, 11, 16.
+The executor MUST reject the action before producing new effects when a required observation context is stale/retired, a mandatory age bound fails, or a required precondition is false or unestablishable, distinguishing stale context, failed gameplay prerequisite and unavailable evidence without leaking hidden facts. For example, if a healing target has died or changed allegiance, the game rejects the stale action and SHOULD provide an authorized current summary or trigger an observation update/query hint; the Agent MUST reassess using current observations rather than mechanically retrying unchanged parameters, while still reconciling any prior action whose effect was uncertain under section 11.
 
 <a id="section-11"></a>
 
@@ -772,27 +750,19 @@ Each observation and action MUST remain associated with its authorized role, pri
 
 An NPC or Boss MAY receive game-authorized internal knowledge unavailable to the player. A guide MAY receive game-authorized progression or tutorial knowledge. A player companion MAY also hold player-authorized memories from outside the current game. No role name by itself grants omniscience, permission to reveal knowledge, or authority to act. Switching or combining roles requires explicit applicable authority, and changes affecting an observation perspective invalidate its prior baseline as specified in section 9.
 
-### 13.2 Active roles and role limits
+### 13.2 Declared role slots, coexistence and active limits
 
-A game run uses either player-companion mode or independent AI NPC/enemy mode; the two modes MUST NOT be active simultaneously within that run. In companion mode, each player MAY have one active companion, including in multiplayer. Multiple players' companions MAY coexist and interact within their respective authorization and the game's declared capabilities. This is at most one companion per player, not one companion for the entire multiplayer game. In independent NPC/enemy mode, the entire game run permits at most one active independent AI NPC/enemy, including a Boss.
+The game developer declares supported gameplay-role slots, active concurrency limits and role-coexistence rules in the game's `Descriptor`; an Agent or player preference MUST NOT override those game-declared structural bounds:
 
-Changing these limits requires a protocol revision; an implementation cannot relax them on its own.
+- **Supported role slots:** A game MAY expose player-companion slots, independent AI NPC/enemy (including Boss or guide) slots, or both. Games built solely around independent AI NPCs are valid G2A participants without exposing an unused player-companion slot, and companion-focused games need not support AI NPCs.
+- **Companion concurrency and empty-slot playability:** Where player-companion slots are supported, the default limit is at most one active companion per authenticated player (including in multiplayer, where multiple players' companions may coexist and interact within their respective grants and game capabilities). A player MAY leave their companion slot empty; the game MUST remain normally playable without an active companion.
+- **Coexistence and multiple NPCs:** A game's `Descriptor` explicitly declares whether player companions and independent AI NPCs may be active simultaneously in the same run, as well as the maximum number of active independent AI NPCs per run. Unless the game explicitly declares coexistence or higher limits, implementations MUST NOT assume simultaneous companion+NPC activation or multiple active independent AI NPCs.
 
-The game MUST bind each companion to its authenticated owner, role, perspective and scope. Interactions between companions MUST preserve source identity, audience and each owner's authority; one companion's observations, memories or action permissions MUST NOT be implicitly shared with another. Another player's presence or consent does not authorize control of an absent player's companion. Sections 14.1, 15, 16.3 govern presence, disclosures and multiplayer interactions.
+**Strict per-role isolation and fencing.**
 
-**Enforcing the limits.**
+Regardless of how many companions or independent AI NPCs are active in a run, the game MUST bind each active role to its authenticated owning player (or room-host payer under section 16.2), role identity, information perspective, audience and scope. Coexisting roles MUST NOT implicitly share observations, private memories, action grants or billing authority; another player's presence or consent never authorizes control of an absent player's companion or AI NPC.
 
-The game MUST identify the game-run boundary consistently and enforce mode exclusivity and the applicable per-player or run-wide limit during admission, replacement, handoff and recovery, including concurrent requests. Additional connections, Agent processes or combined role declarations MUST NOT bypass these constraints. Before switching mode, all active G2A gameplay-role bindings of the old mode MUST be retired or fenced; before replacing a companion or NPC, its previous active binding MUST be retired or fenced. Ordinary non-G2A NPCs and game simulation are neither counted nor stopped by these role limits.
-
-The limits concern active gameplay roles, not retained memories or infrastructure process count.
-
-**Required slots do not require player use.**
-
-The game developer fixes the applicable gameplay mode; an Agent or player preference MUST NOT override that developer-defined mode. A participating game MUST provide a player-companion slot as its minimum role integration and MAY additionally provide an independent AI NPC/enemy slot. Providing a slot declares supported integration, not an active role or a requirement to activate both: optional NPC support MUST NOT be interpreted as permitting companion and NPC modes to coexist in a run. The game MUST distinguish supported slots, its developer-defined mode and currently active bindings in its declarations and enforce the limits above.
-
-The player MAY leave the required companion slot empty and play without enabling a companion. The game MUST remain normally playable without a companion and MUST NOT require an active companion merely because it exposes this integration slot. Required support is not mandatory player use. Entry, summoning and dismissal follow section 14.2.
-
-Player companions are the primary integration target of this specification. Independent AI NPC/enemy integration is a secondary optional capability; support for companions does not require implementing AI NPCs. For an independent AI NPC, its owning user's presence is the required liveness association under section 14.1. The presence of other players is not a substitute for that owner.
+The game MUST consistently identify the game-run boundary and enforce declared slot, coexistence and concurrency limits across admission, replacement, handoff and recovery, including concurrent requests. Before switching incompatible modes or replacing an active companion or NPC, previous active bindings MUST be retired or fenced. Ordinary non-G2A NPCs and native game simulation are unaffected by these limits.
 
 <a id="section-14"></a>
 
@@ -803,9 +773,9 @@ First distinguish who or what has stopped. Player departure, AI-service interrup
 | Situation | Main handling rule |
 | --- | --- |
 | The player leaves or is determined offline | Stop associated G2A gameplay activity; on re-entry, the old task still awaits a new instruction. See section 14.1. |
-| The player remains online but the AI service is interrupted | The game continues under the developer-declared local handling policy. After recovery, the player decides whether the companion continues. See section 14.2. |
+| The player remains online during an AI service interruption | The game continues. Brief transport blips within an active lease (before fallback takeover) may seamlessly resume via `session.resume`; extended outages or fallback takeovers require the player's decision before continuing. See section 14.2. |
 | The player dismisses the companion | Stop observation and autonomous gameplay, without deleting memories merely because of dismissal. See section 14.2. |
-| The player stops a task | Stop subsequent autonomous actions within that scope; already-issued actions follow game rules. See section 16.1. |
+| The player stops a task | Stop subsequent plans and cancel/fence pending unclaimed actions in scope; already-executing actions follow game rules. See section 16.1. |
 
 The clauses below separately govern stop conditions, in-flight outcomes and recovery. Stopping subsequent decisions does not undo game effects that have already occurred.
 
@@ -821,15 +791,15 @@ An Agent heartbeat alone MUST NOT assert that its player is still present or kee
 
 **What stops and what remains.**
 
-Once a stop condition is known or stopping is enforced, the affected Agent MUST cease environment-monitoring and planning/inference loops for continued gameplay, and MUST NOT schedule new attacks, movement, dialogue, trades, purchases or other world actions. The game component responsible for final adjudication MUST block subsequent actions no longer authorized after stopping, cancel queued work not yet submitted to the game, and stop delegated planning or execution loops from producing new actions.
+Once a stop condition is known or stopping is enforced, the affected Agent MUST cease environment-monitoring and planning/inference loops for continued gameplay, and MUST NOT schedule new attacks, movement, dialogue, trades, purchases or other world actions. The game component responsible for final adjudication MUST block subsequent actions no longer authorized after stopping, cancel or fence unclaimed `pending` work, and stop delegated planning or execution loops from producing new actions.
 
-Skills or attacks already issued to the game complete naturally under game rules and need not be recalled merely because the companion stops; independently applicable game authorization and cancellation rules remain in force. Delegating a task to a game executor MUST NOT bypass this boundary. Effects committed before stopping takes effect, irreversible in-flight consequences and uncertain results MUST be accounted for truthfully; they are not automatically rolled back. This does not freeze the game world, undo already fired projectiles, or stop ordinary game simulation or non-G2A NPC logic.
+Skills or attacks already executing in the game complete naturally under game rules and need not be recalled merely because the companion stops; independently applicable game authorization and cancellation rules remain in force. Delegating a task to a game executor MUST NOT bypass this boundary. Effects committed before stopping takes effect, irreversible in-flight consequences and uncertain results MUST be accounted for truthfully; they are not automatically rolled back. This does not freeze the game world, undo already fired projectiles, or stop ordinary game simulation or non-G2A NPC logic.
 
 **Multiplayer games and NPCs.**
 
-In multiplayer games this rule applies to each affected authenticated player association and its scoped G2A activity; one player's departure is not evidence that every player is offline. Independently authorized sessions for other online players MAY continue. An independent NPC or game-governed guide MUST use its owning user as the required player-presence association. It MUST NOT borrow another player's presence or silently rebind authority to keep an absent owner's role active. No G2A world activity may continue without its qualifying online player association.
+In multiplayer games this rule applies to each affected authenticated player association and its scoped G2A activity; one player's departure is not evidence that every player is offline. Independently authorized sessions for other online players MAY continue. Each independent NPC or game-governed guide MUST use its authenticated owning user as the required player-presence association. It MUST NOT borrow another player's presence or silently rebind authority to keep an absent owner's role active. No G2A world activity may continue without its qualifying online player association.
 
-When the owning user (the room host in this scenario) leaves or is determined offline, the AI NPC MUST stop activity immediately upon that determination under section 14.1, even if other players remain online. This specification provides no continuation of that NPC on behalf of the absent owner. Other players being present, a room-host change or a billing reassignment MUST NOT silently keep that NPC active. Pending and in-flight effects remain subject to truthful stop/cancellation accounting; detection latency is not an offline-continuation mode.
+When the owning user (the room host in a room-hosted scenario) leaves or is determined offline, every AI NPC bound to that owning user MUST stop activity immediately upon that determination under section 14.1, even if other players remain online. This specification provides no continuation of that NPC on behalf of the absent owner. Other players being present, a room-host change or a billing reassignment MUST NOT silently keep that NPC active. Pending and in-flight effects remain subject to truthful stop/cancellation accounting; detection latency is not an offline-continuation mode.
 
 Retaining authorized memories, receipts and recovery state is not active gameplay. Bounded non-gameplay cancellation, result settlement, reconciliation and persistence MAY finish without authorizing further world actions. Services MUST stop new gameplay model requests and request cancellation of in-flight model work where supported. This requirement aims to prevent continuing offline token consumption; the protocol cannot guarantee zero tokens or zero cost after a disconnect because detection, in-flight requests and provider cancellation/billing boundaries differ.
 
@@ -839,11 +809,11 @@ Implementations MUST disclose those limits and report actual or still-unknown us
 
 Reconnection MUST establish current player presence, valid admission/grants, current control generation and an authorized fresh state before gameplay resumes. Durable resume preserves eligible state, not permission to act offline: it MUST NOT silently revive a closed session, replay an offline action backlog or continue a stale plan. After the player exits the game, the previous task MUST remain stopped on the next entry, even if it was previously approved. The companion MUST wait for a new player instruction before starting that task again.
 
-Rejoining a companion slot or recovering state is not a new instruction to resume the old task; current admission and game authority still apply. Handoff between Agent processes does not waive these requirements. Exact presence fields, timeout bounds, stop receipts and recovery encodings remain to be frozen in the applicable contracts; this section adds semantic obligations, not new core states or operation names.
+Rejoining a companion slot or recovering state is not a new instruction to resume the old task; current admission and game authority still apply, and handoff between Agent processes does not waive these requirements.
 
 ### 14.2 Companion joining, dismissal and service interruption
 
-In companion mode, the player MUST be able to summon or dismiss the companion at any time during play. On entering the game, joining follows the player's own configured preference: automatic joining or a prompt asking whether to join. Both configurations MUST also allow manual summoning during play. Automatic joining uses the player's configured choice and valid admission; it MUST NOT bypass required authorization, the developer-fixed game mode or the per-player companion limit. Declining the entry prompt or starting with an empty slot MUST NOT remove the manual-summoning option.
+Where player-companion slots are supported, the player MUST be able to summon or dismiss the companion at any time during play. On entering the game, joining follows the player's own configured preference: automatic joining or a prompt asking whether to join. Both configurations MUST also allow manual summoning during play. Automatic joining uses the player's configured choice and valid admission; it MUST NOT bypass required authorization, the game's declared role constraints or the per-player companion limit. Declining the entry prompt or starting with an empty slot MUST NOT remove the manual-summoning option.
 
 The game MUST truthfully report transition state and any in-flight action outcome rather than imply that a visible disappearance rolls back committed effects.
 
@@ -861,13 +831,12 @@ Recovery supplies the companion with the current authorized game state, not a re
 
 **After service recovery.**
 
-After the AI service reconnects, the player decides whether the companion continues. Reconnection alone MUST NOT automatically resume companion actions, replay queued gameplay or revive an old plan. Before continuation, the implementation MUST obtain the player's decision to continue, revalidate current authority and control generation, refresh authorized state and reconcile unresolved outcomes. The automatic-joining preference for entering a game is not permission to bypass this interruption-specific decision. If the player does not choose to continue, companion actions remain paused while the game continues.
+Recovery behavior distinguishes brief transport blips from extended outages or local-fallback takeovers:
 
-For an independent AI NPC/enemy, including a Boss, the developer determines service-unavailability behavior according to the game: pausing, takeover by game-script logic or another declared handling policy. The game MUST declare the applicable fallback and recovery behavior and distinguish script-driven effects from Agent-driven effects. The companion-specific player continuation decision MUST NOT be imposed automatically on NPC recovery.
+1. **Transient reconnection within an active lease:** When `resume` is negotiated and reconnection completes within the unexpired session lease (or declared brief-glitch window) *before* local fallback behavior has taken over, while the player remains continuously online and has not issued a stop or dismissal, the Agent MAY invoke `session.resume` to revalidate current authority and control generation, fetch a fresh authorized snapshot, reconcile any unresolved in-flight actions under section 11, and seamlessly continue authorized assistance without interrupting gameplay with a modal prompt.
+2. **Extended interruption, expired lease, or post-fallback recovery:** Once the lease/glitch window expires or local game-behavior fallback has taken over, reconnection alone MUST NOT automatically resume companion actions, replay queued gameplay or revive an old plan. Before continuation, the implementation MUST obtain the player's explicit decision to continue, revalidate authority and control generation, refresh authorized state and reconcile unresolved outcomes. Entry auto-joining preferences do not bypass this post-outage continuation decision; until the player chooses to continue, companion AI actions remain paused while gameplay continues.
 
-A fallback MUST NOT grant unavailable AI capabilities, bypass current permissions or claim AI-generated decisions when a script made them; ordinary script takeover does not authorize offline G2A activity under section 14.1.
-
-The developer's interruption fallback MUST be defined for implementation, but G2A does not require a player-facing explanation of that fallback or a player choice between stationary and local-basic behavior. This is distinct from the existing player decision about whether the reconnected companion continues.
+For each independent AI NPC/enemy (including a Boss), the developer declares service-unavailability and recovery behavior (such as pausing or game-script fallback), keeping script-driven effects clearly distinguished from Agent-driven effects without imposing companion-specific continuation prompts or authorizing offline G2A activity under section 14.1. The developer's local fallback policy need not be exposed as a player-configurable switch.
 
 <a id="section-15"></a>
 
@@ -911,11 +880,11 @@ The game remains authoritative over the actual current world and save state. A r
 
 Where save reloads or narrative branches are supported, the applicable profile MUST define the playthrough, branch and checkpoint context of authoritative current state, associate retained experiences with their known timeline provenance, and define branch ancestry or an equivalent unambiguous relationship if policy depends on it. Missing historical coordinates MUST remain explicitly unknown or unavailable rather than be fabricated. Their absence does not prohibit otherwise authorized import or retention of memory, but that memory MUST NOT establish current-state truth or satisfy a prerequisite requiring those missing coordinates.
 
-A rollback notification MUST distinguish the authoritative new world context from a developer's recommended memory policy and the player's effective choices. Retrieval isolation MUST follow the effective player choice: corresponding prior-branch records MAY be excluded from retrieval only when the player selects isolation, or has not configured a choice and the developer recommends it by default; the records MUST NOT be deleted. When the player explicitly chooses to use all existing memories, isolation based solely on their earlier timeline provenance MUST cease, while provenance labels and applicable data permissions remain in force. It MUST NOT promise restoration of records already deleted or never retained. Exact coordinate fields and notification mappings remain subject to section 2; this paragraph does not register a `timeline.rollback` operation.
+A rollback notification MUST distinguish the authoritative new world context from a developer's recommended memory policy and the player's effective choices. Retrieval isolation MUST follow the effective player choice: corresponding prior-branch records MAY be excluded from retrieval only when the player selects isolation, or has not configured a choice and the developer recommends it by default; the records MUST NOT be deleted. When the player explicitly chooses to use all existing memories, isolation based solely on their earlier timeline provenance MUST cease, while provenance labels and applicable data permissions remain in force. It MUST NOT promise restoration of records already deleted or never retained.
 
 **Timeline metadata and retrieval isolation.**
 
-A game supporting these timeline capabilities SHOULD expose playthrough, branch and checkpoint identifiers in session context and observation baselines. The candidate names `playthrough_id`, `branch_id`, `timeline_cursor` and `save_epoch` MUST retain distinct meanings: a narrative-position cursor may return to an earlier position on reload; a generation identifying the new load MUST NOT go backward or be reused, and a monotonically counted generation MUST increase on each load. They do not replace section 9 observation identity, and cursors across branches MUST NOT be compared without provenance and ancestry. Exact fields remain subject to profile freezing.
+A game supporting these timeline capabilities SHOULD expose playthrough, branch and checkpoint identifiers in session context and observation baselines. The candidate names `playthrough_id`, `branch_id`, `timeline_cursor` and `save_epoch` MUST retain distinct meanings: a narrative-position cursor may return to an earlier position on reload; a generation identifying the new load MUST NOT go backward or be reused, and a monotonically counted generation MUST increase on each load. They do not replace section 9 observation identity, and cursors across branches MUST NOT be compared without provenance and ancestry.
 
 When persisting corresponding experiences or conversation summaries, the Agent MUST bind known playthrough, branch, checkpoint and load-generation provenance metadata. Missing values MUST remain explicitly unknown, not fabricated or replaced by import time. Derived summaries MUST preserve available provenance and MUST NOT bypass retrieval isolation through summarization.
 
@@ -927,7 +896,7 @@ Retrieval isolation is not forced deletion and does not guarantee removal of kno
 
 Memory implementations MUST distinguish enforceable storage, retrieval and disclosure permissions from soft conversational preferences. They MUST enforce applicable data permissions under their control, apply selected conversational preferences through declared mechanisms such as prompting, and report the actual scope and limitations of each. Applying a soft preference does not guarantee that every generated response complies. Disabling retrieval or deleting a controlled record is not proof that a model has forgotten a fact.
 
-Neither developer recommendations nor player settings justify promising absolute spoiler prevention, erasure of model parameters, or erasure at an independent recipient. The exact interoperable memory-policy encoding remains a profile design matter; the authority and override rules in this section are part of this specification now, not deferred policy decisions.
+Neither developer recommendations nor player settings justify promising absolute spoiler prevention, erasure of model parameters, or erasure at an independent recipient.
 
 ### 15.4 Multiplayer memory and player-configured confidentiality style
 
@@ -935,11 +904,7 @@ A companion MAY retain its conversations with other players as long-term memory,
 
 Confidentiality style is a soft behavioral preference, not a guaranteed confidentiality mechanism. An implementation MAY use prompting or equivalent model guidance. It MUST apply the player's selected preference and accurately disclose that generated responses may depart from it. Occasional model output beyond that soft preference is a permitted limitation of this profile, not by itself evidence that the preference was never applied. Implementations MUST NOT promise one-hundred-percent confidentiality or describe prompting alone as enforced access control.
 
-The owner's sharing preference governs eligible companion conversation; developer recommendations remain advisory under section 15.2. It does not grant access to another player's private records or override game- or service-enforced audience, storage, retrieval, forwarding or disclosure permissions. Explicit forwarding of protected messages and retrieval of protected memory remain subject to those permissions. The permitted limitation on model behavior does not excuse bypassing these checks or expanding a frozen audience. Implementations MUST distinguish enforceable data boundaries from soft conversational preferences.
-
-This section adds neither universal per-message approval nor guaranteed model silence.
-
-Exact profile encoding remains to be defined. The long-term-memory choice and soft-confidentiality semantics above are established review-draft decisions, not open questions about whether such behavior is allowed.
+The owner's sharing preference governs eligible companion conversation; developer recommendations remain advisory under section 15.2. It does not grant access to another player's private records or override game- or service-enforced audience, storage, retrieval, forwarding or disclosure permissions. Explicit forwarding of protected messages and retrieval of protected memory remain subject to those permissions. The permitted limitation on model behavior does not excuse bypassing these checks or expanding a frozen audience. Implementations MUST distinguish enforceable data boundaries from soft conversational preferences, adding neither universal per-message approval nor guaranteed model silence.
 
 ### 15.5 Text and voice interaction
 
@@ -947,9 +912,7 @@ This specification supports both text and voice for player-companion communicati
 
 Speech recognition or synthesis MAY be provided by an authorized component outside the Agent model; the implementation MUST distinguish original speech, its transcription and synthesized output where relevant to provenance, and MUST NOT present uncertain recognition as a verified player instruction.
 
-Voice conversation is distinct from interpreting game-environment audio under section 9.5. A companion can converse through speech recognition and synthesis while making decisions from structured game data; this does not by itself qualify it as an advanced Agent that understands game images and audio. Conversely, environment-audio capability does not establish support for player speech input or spoken replies. Each capability MUST be declared and tested separately.
-
-The applicable profile MUST define exact text/voice encodings, supported directions, errors and modality transitions; this section does not add a new unregistered core operation or certify current voice implementation.
+Voice conversation is distinct from interpreting game-environment audio under section 9.5. A companion can converse through speech recognition and synthesis while making decisions from structured game data; conversely, environment-audio perception does not establish support for player speech input or spoken replies. Each capability MUST be declared and tested separately, with encodings, directions, errors and modality transitions defined by the applicable profile.
 
 ### 15.6 Companion preferences and NPC characterization
 
@@ -1015,15 +978,13 @@ Multi-step objective completion MUST be supported by evidence that the declared 
 
 Existing task-level or standing authorization MAY cover multiple ordinary game actions. This specification does not impose per-step player confirmation on actions already covered by that authority. Where a particular action requires separate confirmation, that requirement still applies. Expanding the authorized scope requires the applicable new approval; a self-generated plan cannot expand it. Autonomy does not authorize hidden game data, unavailable capabilities, forbidden game actions, unrestricted resource use, or purchases merely because they would help complete a task. Store purchases remain subject to section 17.1.
 
-The player MUST be able to adjust or stop the companion's autonomous assistance. On receipt of a valid stop or narrowing instruction, the companion MUST stop scheduling and issuing newly disallowed subsequent actions and prevent affected queued actions not yet submitted to the game from being issued. Skills or attacks already issued to the game complete naturally under game rules; the player's stop alone does not require their cancellation, recall or reversal. The companion MUST reconcile unresolved outcomes truthfully and MUST NOT represent cessation of further decisions as cancellation of already-issued actions.
+The player MUST be able to adjust or stop the companion's autonomous assistance. On receipt of a valid stop or scope-narrowing instruction, handling follows the action lifecycle stages of section 10:
 
-The game MUST distinguish unsubmitted companion plans from actions already handed to game execution and enforce game rules at the applicable authorization and effect boundaries. Implementations MUST report whether stopping is pending or effective and any actions already committed or only partially cancelled. A stop does not undo an attack, spent resource or other effect that has already occurred; rollback requires an explicitly supported compensating action and its own authority.
+1. **Unsubmitted Agent queue:** The companion MUST immediately stop scheduling new disallowed actions and discard unsubmitted queued steps in the stopped scope.
+2. **Queued `pending` actions (unclaimed, `effect: none`):** For affected actions already sent to the game that have not yet been claimed for execution, the companion MUST immediately issue `action.cancel` where supported; when the player's stop or permission narrowing reaches the game authority directly, the executor MUST fence and block `action.claim` for those unclaimed `pending` requests.
+3. **In-flight `executing` actions:** Skills, attacks or projectiles already claimed and executing in the game world proceed or terminate under the game's own rules (and any action-specific cancellation support); a stop instruction does not fabricate rollback of committed or in-flight effects.
 
-Loss of connection MUST NOT be represented as proof that all work stopped; section 14.1 requires bounded detection and enforced stopping, with truthful in-flight effect accounting.
-
-Stopping companion autonomy is not a request to cancel every already-issued game action. An action request already sent to the game counts as issued even while the game is processing it or waiting to execute it; it MUST NOT be reclassified as an unsubmitted companion queue entry merely because its effect has not occurred. A separately supported game cancellation capability remains available under its own conditions, but this stop rule neither requires that capability nor automatically invokes it.
-
-A delegated long-running task MUST NOT disguise new post-stop skills or attacks as one pre-stop issued action; it MUST cease issuing those subsequent actions.
+Implementations MUST report whether stopping is pending or effective, reconcile unresolved outcomes truthfully under section 11, and never treat connection loss alone as proof that all work stopped (section 14.1). A delegated long-running task MUST NOT disguise new post-stop skills or attacks as a single pre-stop issued action.
 
 ### 16.2 Negotiated intelligence, autonomy and resource preferences
 
@@ -1107,8 +1068,6 @@ Player changes or revocation MUST be honored before a transfer's effect is commi
 
 These policies apply to in-game item trading and gifting, including proactive multiplayer interactions. They do not authorize real-money payments, account top-ups, cash-out or external financial transactions, do not replace the store-purchase authorization in section 17.1, and do not replace the independent irreversible-interaction policy in section 16.5. No default among these policies is fixed by this review draft: implementations MUST disclose the active policy rather than infer unlimited authority from a missing selection.
 
-Exact wire fields and interoperable profile encoding remain to be specified; the semantic requirements above are not deferred.
-
 ### 16.4 Game-defined companion gameplay rules
 
 The game developer determines whether a companion can be injured or die and how gameplay conditions restrict its actions. The game MUST declare applicable rules and expose only the authorized status and available actions needed for the interaction. The game itself MUST enforce current injury, death and other gameplay restrictions at the effect boundary and supply the corresponding result through its game interaction node; player personality or appearance preferences and an Agent's autonomous plan MUST NOT override those game rules. G2A does not require all games to use damage, health, death or resurrection mechanics.
@@ -1125,29 +1084,23 @@ The player MUST be able to choose independently among allowing autonomous execut
 
 Confirmation MUST identify the relevant consequence; a materially changed consequence requires a new choice. Current player policy and game permissions MUST be enforced before an effect is committed, including when its request has already been submitted. In-flight outcomes are handled under sections 11, 16.1.
 
-This policy is separate from section 16.3.1's item-transfer confirmation policy. Where both apply, each applicable requirement MUST be satisfied; a prohibition blocks the interaction. Player permission does not override unavailable capabilities or game rules. This draft fixes no default selection or universal definition of irreversible gameplay; the game supplies the declaration and the service exposes the player's effective choice. Exact wire encoding remains a profile-design task.
+This policy is separate from section 16.3.1's item-transfer confirmation policy. Where both apply, each applicable requirement MUST be satisfied; a prohibition blocks the interaction. Player permission does not override unavailable capabilities or game rules. This draft fixes no default selection or universal definition of irreversible gameplay; the game supplies the declaration and the service exposes the player's effective choice.
 
 ### 16.6 Unanswered player confirmations
 
-When an action requires player confirmation, the confirmation request MUST have a timeout rather than wait indefinitely. If no affirmative response is received before that timeout, the request MUST be treated as declined or not authorized, and the companion MUST abandon that proposed action. Silence MUST NOT count as approval or permission to execute. Expiration of a confirmation request MUST NOT be reported as an executed or completed action.
+When an action requires player confirmation (whether pre-requested or triggered by section 10's `confirmation_required` challenge), the confirmation request MUST carry a bounded `expires_at` timeout rather than wait indefinitely. If no affirmative `action.confirm` is recorded before that timeout, the proposal MUST be treated as declined/unauthorized and abandoned; silence MUST NOT count as approval, and confirmation expiry MUST NOT be reported as an executed or completed action.
 
-While a request is pending and after it expires, the companion MAY continue independently authorized low-risk routine behavior, such as following, damage avoidance, basic self-defense or ordinary conversation, rather than stall entirely on one confirmation. That behavior MUST NOT depend on the unapproved action or bypass confirmation, presence or stop rules. If changing gameplay invalidates confirmation conditions, the proposal MUST be marked invalid or unauthorized and MUST NOT support continued execution. Invalid confirmation does not undo independently committed effects or introduce a new core Action state.
+While a confirmation challenge is pending and after it expires, the companion MAY continue independently authorized low-risk routine behavior (such as following, damage avoidance, basic self-defense or ordinary conversation) rather than stall entirely, provided that behavior does not depend on the unapproved action or bypass confirmation, presence or stop rules. If changing gameplay invalidates the proposal's material conditions, the challenge MUST be marked stale/unauthorized without undoing independently committed effects.
 
-After timeout or refusal, implementations MUST enforce a declared confirmation cooldown. Without a material change in relevant state or a new player instruction on the matter, the Agent MUST NOT ask again for the same target or intent within that window. The game SHOULD rate-limit repeated confirmations and suppress repeated player interruptions while reporting the rate limit or suppression to the caller. Once repeat conditions are met and the action remains relevant, the companion MAY ask again; a later request MUST reassess current game state, permissions and material terms rather than revive expired authority. An expired request's late response MUST NOT silently authorize the previously abandoned action.
-
-This draft fixes neither a timeout duration nor a protocol-wide cooldown duration. Implementations MUST define their timeout, cooldown and repeat-request conditions and distinguish pending, confirmed, declined and expired states. A repeat policy MUST NOT turn repeated silence into authorization. This section applies to confirmation-required actions, including sections 16.3.1, 16.5 and budget changes under section 17.1.2; it does not introduce confirmation for actions that the player's selected policy already permits autonomously.
+After timeout or refusal, implementations MUST enforce a declared confirmation cooldown. Without a material change in relevant state or a new player instruction on the matter, the Agent MUST NOT re-prompt for the same target or intent within that cooldown window; the game SHOULD rate-limit repeated confirmation challenges and report suppression/rate-limiting to the caller. Once repeat conditions are met and the action remains relevant, a fresh proposal MUST reassess current state, permissions and material terms rather than revive an expired challenge, and a late reply to an expired challenge MUST NOT authorize execution. This section governs confirmation-required actions (including sections 16.3.1, 16.5 and budget changes in section 17.1.2) without imposing confirmation on actions already permitted autonomously.
 
 ### 16.7 Superseding instructions and changed targets
 
-When the player's latest instruction conflicts with an earlier one, the latest instruction MUST take precedence within applicable authority. The companion MUST stop issuing subsequent actions from the conflicting old instruction and prevent its unsubmitted queued actions from being sent. Actions already issued to the game remain governed by section 16.1 and game rules; a new instruction does not by itself recall an issued skill or attack.
+When the player's latest instruction conflicts with an earlier one, the latest instruction MUST take precedence within applicable authority. Following section 16.1, the companion MUST discard unsubmitted steps from the superseded plan and immediately issue `action.cancel` (or apply game-side fencing) for unclaimed `pending` actions of that superseded plan, while already-`executing` skills or attacks settle under game rules.
 
-When a relevant target or objective changes, such as the targeted Boss dying, the game MUST proactively notify the Agent of the authorized change relevant to its pending objective. This targeted invalidation notification is required even where routine observations otherwise use queries under section 9.6; it does not require unrestricted observation streaming or disclosure of hidden state.
+When a relevant target or objective changes (such as a targeted Boss dying), the game authority MUST autonomously emit an authorized target-invalidation event into the session event stream without waiting for a routine observation query under section 9.6 — delivered immediately over negotiated streaming extensions, or retrieved via `session.events` polling (and optionally surfaced as a synchronous invalidation hint on intervening responses) in poll-only bindings. This targeted invalidation requires neither unrestricted observation streaming nor disclosure of hidden state.
 
-The applicable profile MUST define how the game learns and maintains the target/objective associations requiring notification, their lifetime and withdrawal conditions, and which authorized changes trigger invalidation. Existing action targets or another explicitly negotiated association mechanism MAY carry this information; the game is not required to infer an Agent's uncommunicated internal plan. This mapping does not register a new core task operation or grant access to hidden target facts.
-
-The Agent MUST evaluate whether the old instruction or plan has become inapplicable, request withdrawal of affected work through the game's supported mechanism where applicable, and decide again using current authorized state and the player's current instruction.
-
-A withdrawal request is not proof of cancellation. It takes effect only if the game supports withdrawal for that action and its current state permits it. Unsupported, rejected, pending and successful withdrawal MUST remain distinguishable; an already-issued skill MUST NOT be assumed recallable, and committed effects MUST NOT be reported as undone without an actual supported result. Where withdrawal is unavailable, the companion MUST still stop issuing obsolete subsequent actions and account for outstanding outcomes rather than continue the invalid plan.
+The applicable profile MUST define how target/objective associations are established (for example, from active action targets or an explicitly negotiated association field), their lifetime and withdrawal conditions, and which authorized changes emit invalidation events; the game need not infer uncommunicated internal plans. Upon receiving invalidation, the Agent MUST reassess its plan against current authorized state and player instructions, request cancellation/withdrawal of affected work where supported, and cease issuing obsolete follow-up actions even when in-flight effects can no longer be recalled.
 
 <a id="section-17"></a>
 
@@ -1209,11 +1162,15 @@ Generic autonomous purchase budgets cover only explicitly declared ordinary rene
 
 ### 17.2 Companion appearance
 
-By default, each game developer provides a companion appearance adapted to that game's visual style. The player MAY override this default and require their own configured appearance instead. Implementations MUST distinguish the developer-provided default, the player's chosen appearance and the appearance actually rendered. A player's override takes precedence as an appearance preference; it does not establish technical compatibility or authorize unsafe assets, arbitrary code execution or broader game capabilities.
+Where in-game or desktop companion appearance is used (an optional capability; games without visual companion rendering need not supply an appearance asset), selection follows a three-tier priority order:
 
-The game and any party actually supplying appearance or rendering functionality MUST declare relevant supported formats and rendering capabilities for the functions each performs and truthfully report whether the chosen appearance can be used. They MUST NOT claim to have rendered the player's selection when a different appearance is shown. If the game cannot support the player-selected appearance, including an unsupported model format, it MUST clearly notify the player that the selection cannot be supported and provide the game-default companion appearance instead. The fallback MUST be identified as the default, not reported as a successful custom-appearance override.
+1. **Player forced override:** an explicit custom appearance required by the player;
+2. **Game-default companion appearance:** an appearance provided by the game developer to match the game's visual style when the player has not forced an override;
+3. **Companion default appearance:** the companion's own baseline appearance when the game accepts external formats without supplying a bespoke game appearance.
 
-Silent substitution or pretending to render the selected appearance is prohibited. Appearance selection MUST remain distinct from companion identity, personality, memories and action authority.
+Implementations MUST distinguish all three sources from the appearance actually rendered. A player's override takes precedence as a preference, without establishing technical compatibility or authorizing unsafe assets, code execution or broader gameplay permissions.
+
+Each party supplying or rendering appearances MUST declare supported formats and rendering constraints and truthfully report compatibility. Silent substitution or pretending to render an unsupported selection is prohibited: if the game cannot support the selected appearance (such as an incompatible model format), it MUST clearly notify the player and follow the player's or profile's explicit fallback rule — either prompting the player to reselect/decline before joining, or applying the game-default (or compatible companion-default) appearance while explicitly labeling it as a fallback rather than a successful custom override. Appearance selection remains strictly separate from companion identity, personality, memories and action authority.
 
 <a id="section-18"></a>
 
@@ -1243,26 +1200,30 @@ The inherited `Binding` contract does not yet encode this identifier/version pai
 }
 ```
 
-This illustrative request includes the required `session_id` and conforms structurally to the inherited `OperationRequest` schema. The identifiers are examples, not credentials; actual processing still requires an authenticated caller, an existing eligible session and current read authority. `g2a-design-1` denotes the design fixture here, not an allocated production wire version. A reply carries the same `request_id` and exactly one of `result` or `error` under the inherited reply schema. Transport failure before an authenticated protocol reply is not an action result. HTTP success means a protocol reply was delivered, not that an action succeeded.
+This illustrative request includes the required `session_id` and conforms structurally to the inherited `OperationRequest` schema (`g2a-design-1` denotes the design fixture rather than a released wire version). A reply always carries the matching `request_id` and exactly one of `result` or structured `error` under the `OperationReply` schema. Transport failure before an authenticated protocol reply is not an action result.
 
-This candidate mapping differs from the legacy operation-directory HTTP error mappings. It applies only when g2a-http-json/draft-1 is explicitly negotiated and MUST NOT silently replace legacy HTTP behavior.
+To eliminate ambiguity between transport-layer and domain-layer rejections while preserving HTTP gateway observability and standard `Retry-After` semantics, `g2a-http-json/draft-1` maps outcomes deterministically to HTTP status codes (returning the structured `OperationReply` JSON error envelope on all protocol-handled `4xx`/`5xx` rejections):
 
-| Situation | HTTP status |
-| --- | --- |
-| Valid protocol reply, including a domain error | 200 |
-| Undecodable or invalid transport envelope | 400 |
-| Transport authentication or authorization denial | 401 / 403 |
-| Request-body limit exceeded | 413 |
-| Transport rate limit exceeded | 429 |
-| Gateway or service failure | 5xx |
+| Situation | HTTP status | Envelope requirement |
+| --- | --- | --- |
+| Operation accepted or completed without protocol error | 200 | `OperationReply` with `result` (note: an `action.query` result may still report a failed or `unknown` game effect) |
+| Malformed JSON, invalid envelope, or schema/argument validation failure | 400 | `OperationReply` with `error` (`invalid_request` / `invalid_arguments`) |
+| Unauthenticated caller, invalid/expired credential | 401 | `OperationReply` with `error` (`unauthenticated`) |
+| Unauthorized role/scope, revoked grant, or disallowed origin | 403 | `OperationReply` with `error` (`permission_denied` / `revoked`) |
+| Unknown target record within an authorized session/principal scope | 404 | `OperationReply` with `error` (`not_found`) |
+| Stale generation/epoch/baseline/cursor, ID conflict, or `confirmation_required` challenge | 409 | `OperationReply` with `error` (and structured challenge details where applicable) |
+| Request body or collection byte limit exceeded | 413 | `OperationReply` with `error` (`message_too_large`) |
+| Rate, concurrency, or quota limit exceeded | 429 | `OperationReply` with `error` (`resource_limit`) and optional `Retry-After` |
+| Service temporarily unavailable | 503 | `OperationReply` with `error` (`unavailable`) if generated by G2A node |
+| Gateway or execution-wait timeout with unresolved outcome | 504 | Treated as `unknown` outcome under section 11; MUST NOT trigger blind effect replay |
 
-Exact body schemas, retry headers, cache behavior, authentication challenge format and production credential mechanism MUST be frozen with vectors before this binding is released. A 5xx after submission is potentially uncertain, not permission to replay an effect with a new identity.
+For deployments where the game cannot expose an inbound port, the outbound-relay binding encapsulates these abstract operations via `relay.register`, `relay.call`, `relay.pull`, `relay.reply` and `relay.revoke` without granting `GameAuthority` administrative tokens to the relay.
 
 Remote transport MUST use TLS and authenticate the peer under the selected trust profile. Local deployment MUST still identify its caller and define its local trust assumptions. Credentials MUST NOT be put into URLs or logs. Cross-origin access MUST NOT be broadly enabled by default. Private replies MUST NOT enter shared HTTP caches. Redirects MUST NOT leak credentials to unrelated destinations. Discovery endpoints, resource URLs and redirects MUST be treated as untrusted input.
 
 Before fetching, implementations MUST apply a deployment-scoped destination policy covering schemes, hosts/addresses and ports, validate each redirect and resolved destination against that policy, and prevent DNS rebinding from bypassing it. A configured local/LAN deployment MAY permit explicitly scoped local targets; this is not permission to probe arbitrary local services. Destination controls MUST address resource/network risk rather than exclude conforming Agent vendors.
 
-The inherited `g2a-cjson-1` canonicalization uses strict UTF-8, rejects duplicate keys, malformed Unicode, NaN/Infinity, floating-point lexical forms and negative zero, and bounds exact integers to +/-9007199254740991. Keys are sorted by Unicode scalar value, not UTF-16 code unit order; no Unicode normalization is performed; array order is preserved. Implementations MUST use the declared digest domain and exact canonicalization, not ordinary language JSON serialization. New profile digest domains require explicit test vectors before release.
+The inherited `g2a-cjson-1` canonicalization uses strict UTF-8, rejects duplicate keys, malformed Unicode, NaN/Infinity, floating-point lexical forms and negative zero, and bounds exact integers to +/-9007199254740991 (requiring continuous game quantities to use the explicit integer units or fixed-point scales specified in section 5). Keys are sorted by Unicode scalar value, not UTF-16 code unit order; no Unicode normalization is performed; array order is preserved. Implementations MUST use the declared digest domain and exact canonicalization, not ordinary language JSON serialization. New profile digest domains require explicit test vectors before release.
 
 The complete inherited encoding, escaping, input restrictions and digest-domain projections are specified in [WIRE_CONTRACT.md](../protocol/WIRE_CONTRACT.md), with [codec.py](../protocol/codec.py) as its reference algorithm. This summary does not replace those exact rules. The input is UTF-8 without a BOM; Boolean values are not integers, and absent fields are not equivalent to explicit `null`.
 
@@ -1301,7 +1262,7 @@ The current identifiers refer to different artifacts:
 
 | Artifact | Current identifier | Status and meaning |
 | --- | --- | --- |
-| Bilingual specification text | `standard-review-2026-11-14-r71` | Editorial revision of this working draft; not a wire version |
+| Bilingual specification text | `standard-review-2026-11-22-r72` | Editorial revision of this working draft; not a wire version |
 | Inherited design contracts | `g2a-design-1` | Design baseline and test-fixture label; not a deployed protocol release |
 | Observation profile candidate | `observations-draft-1` | Proposed semantics; exact interoperable contract not frozen |
 | HTTP/JSON binding candidate | `g2a-http-json` / `draft-1` | Proposed mapping; negotiation representation still to be defined |
@@ -1351,71 +1312,24 @@ Evidence MUST distinguish schema/contract validation, state-machine/fault tests,
 
 The inherited `g2a-conformance-statement-1` format records design evidence by operation; it is not a complete machine-checkable report for this section. Clause/role/profile applicability, reasons for not-applicable outcomes and the evidence distinctions above require an explicitly versioned report or mapping before release. Implementations MUST NOT silently add enum values to the inherited schema or treat its validator as proof of these new reporting requirements.
 
-**Required coverage by subject.** Applicable conformance tests MUST cover the requirements of their referenced clauses, including the following grouped cases. These groups consolidate overlapping scenarios; they do not replace the normative behavior or allow an applicable case to be omitted.
+**Structured conformance suite matrix.** Applicable conformance tests MUST cover the referenced clauses across the following addressable test suites (unnegotiated optional capabilities record an explicit `not_applicable` reason):
 
-**Admission, authority and refusal (§§1, 3, 4, 5, 7, 8, 12, 13, 14, 20).** Public versus authenticated discovery; consent narrowing; unsupported required extensions; optional-capability absence; role-bound parameter/result validation; wrong resource/audience, cross-player queries, expired/revoked delegation and communication identity failure. Apply equal minimum criteria to independent and first-party providers; reject arbitrary vendor exclusions and disguised restrictions. Separate technical admission from consent. Refusals require consistent standardized codes and specific safe explanations, without hidden facts, credentials or unauthorized data.
-
-Repeated refusal does not establish automatic guilt or an ecosystem-wide ban.
-
-**Version and binding compatibility (§§2, 7, 17, 18, 19, 20).** Unsupported required vocabularies; controlled/offline schema dependencies; unknown optional versus required content and enums; no authorization downgrade on failed negotiation; transport/protocol/effect outcome distinctions; canonicalization edge cases, including supplementary-plane versus BMP key ordering, negative zero, duplicate keys, invalid Unicode and integer limits. Test malicious redirects, DNS rebinding and explicitly authorized local endpoints without vendor discrimination.
-
-**Gameplay roles and lifecycle (§§4.1, 8, 13.1, 13.2, 14).** Required but unoccupied companion slot and normal play without Agent service; optional NPC slot; developer-fixed mode; one companion per player in multiplayer versus one independent NPC per run; run-wide mode exclusivity; concurrent admission/recovery and fencing old bindings before replacement or mode change. Test permitted perspective composition without permission union or simultaneous forbidden roles. Ordinary non-G2A NPCs remain unaffected.
-
-Test auto-entry, entry prompts, decline followed by manual summon, manual dismissal, valid admission, stopped observation/autonomy, retained memory and truthful in-flight effects/residual usage.
-
-**Presence and service interruption (§§14.1, 14.2).** Explicit departure, silent failure, bounded detection and enforcement, Agent heartbeats unable to renew absent-player presence, cancellation of unsubmitted work, in-flight commit races, stopped gameplay inference and truthful residual costs. Preserve independent online-player sessions; prohibit scope borrowing, offline continuation, stale-plan/backlog replay and automatic old-task restart on new entry. Stop an NPC when its owner leaves even if others remain; no silent host/billing reassignment.
-
-Test game entry and continued play without service, later authorized joining, declared stationary/local fallback, current-state-only recovery without observation backfill, player decision before companion continuation, and developer-defined NPC recovery with truthful script/Agent attribution.
-
-**Observations, timing and limits (§§9, 10, 12, 16, 16.2).** Push-only, query-only and combined declarations; unsupported/denied queries and scope/rate enforcement; event/action identity distinctions; atomic snapshots, exact delta baselines, coalescing without broken dependencies, epoch retirement and delayed updates after retraction. Test stale/reordered observations, hidden-object denial, recipient-filtered sequence gaps, expired cursors and snapshot recovery; oversized input, queue overflow/resynchronization and non-droppable control outcomes; uncalibrated clocks, wall-clock jumps and save/epoch replacement without stale-sequence reuse.
-
-Test legal-action changes, decision deadlines and concurrent settlement independently of model cadence. Include compact-cursor identity mapping, mixed per-record visibility transitions, undisclosed removal causes, lossless application of coalesced state and explicit gaps for lost discrete events. Test observation-bound action prerequisites with stale epochs, uncalibrated timing, unavailable evidence, hidden operands and effect-boundary races.
-
-**Structured and multimodal capabilities (§§9.5, 15.5).** Decisions from required structured inputs; refusal or explicit supported-scope agreement for missing required categories; truthful capability claims. Advanced claims require interpretation of both game images and audio, not merely transport. Test optional-media absence, denial, incompatible formats, resource limits, player-enabled/disabled media, advanced structured-only operation and unsupported feeds. Test text/voice source, audience and provenance separately from game-audio perception.
-
-**Memory use and preferences (§§15.1, 15.2, 15.3, 15.4, 15.5, 15.6).** Developer-governed NPC/guide retention or reset; player-controlled cross-game retrieval, retention and prior-playthrough/reload use; separate spoiler and topic preferences with player override of advisory defaults, not protected-data grants. Preserve prior-branch provenance rather than assert current-world truth. Test no automatic game disclosure or forced deletion on reload; selected personality/style overriding developer advice, while NPC characterization stays developer-controlled.
-
-Test multiplayer retention and sharing/non-sharing choices, enforceable audience/retrieval/forwarding permissions and truthful soft-preference limits. Correctly applied soft preferences do not guarantee model silence or spoiler prevention; a model deviation from such a preference is not by itself an access-control conformance failure, while bypassed permission checks remain violations.
-
-**Memory controls and portability (§15.7).** Player viewing, editing and deletion; autonomous organization and original-record deletion without imposed per-deletion approval; truthful status, provenance and no stale-cache resurrection. Export all selected retained experiences and consolidated memories, plus selected personality/style/global-autonomy settings; do not promise deleted originals or identical model behavior.
-
-Test player-initiated destination/scope selection, no default disclosure on provider change, independent open-format import, metadata preservation, unsupported/transformed records and settings, partial/loss receipts and safe unknown-extension round trips without execution. Distinguish edited/derived observations, intentions, event/import times, conflicting claims, missing evidence and deleted-source markers.
-
-**Action execution and recovery (§§10, 11, 16).** Conflicting-identity replay; timeout after effect; cancellation/revocation races, partial effects and truthful state/effect results. Query original action identity after disconnection with origin/scope checks; distinguish accepted/forwarded records from executor evidence and unknown from failed/in-progress/succeeded. Test game- or platform-held persistent records, declared retention, persistent deduplication and explicit uncertainty after loss/expiry, without permanent-history or exactly-once claims.
-
-Default to no re-execution or automatic resend of unresolved actions; any independently decided similar new action must account for possible prior effects and current purchase/high-value/irreversible authority.
-
-**Autonomy, correction and stopping (§§16.1, 16.2, 16.2.1, 16.7).** Multi-step completion supported by objective evidence, not plan text, estimates or one accepted step; observation-triggered combat within authority; blocked/unknown outcomes without false completion or unauthorized purchases. Test global autonomy persistence, higher-level contextual choices, lower-level clarification, explicit instructions versus inferred goals, local correction without repeating unrelated instructions, and unchanged game permissions.
-
-Risk-taking assistance uses the same level, without a separate protect-others switch; follow explicit player insistence within authority. Latest conflicting instructions stop unsubmitted old work; relevant game-originated target changes cause reassessment and conditional withdrawal, not false cancellation. Stop delegated future actions while already-issued skills/projectiles follow game rules; distinguish stopped autonomy from in-game execution and separately supported cancellation.
-
-**Multiplayer and confirmation policies (§§16.3, 16.3.1, 16.5, 16.6).** Recipient control of proactive conversation; permitted companion combat where game-enabled and explicit rejection otherwise; authorized help/chat/trades without blanket per-interaction confirmation, preserving other players' consent, ownership and disclosure rights. Test trades/gifts under all three policies, combined developer/player high-value designation, normal/high-value items, no committed transfer before required confirmation, material-term changes and policy/revocation races.
-
-Test context-specific irreversible declarations and allow/confirm/prohibit independently alongside transfer rules at every autonomy level; no relabeling or bypass. Test confirmation expiry without effect, no consent from silence, abandoned proposals, independent authorized work, fresh rechecks before later requests and no revival by late replies; no universal timeout is assumed. These policies do not authorize external payments or replace store authority.
-
-**Runtime resources and NPC cost ownership (§16.2).** Supported versus requested configurations, estimates versus measured usage, player-selected units/scopes/caps, delayed metering and in-flight settlement, cap-triggered pause with normal gameplay and no new chargeable work or autonomous cap increase. Test identifiable NPC-owner payer binding, attributable usage and no implicit charging of other players; ownership, role and billing authority remain distinct.
-
-**Optional store (§17.1).** Structured attributes/prices, stage-dependent listing and eligibility, withdrawal after discovery, price-change notice and current authorization, bounded recommendations and reduced frequency after sustained refusal. Test recommendation without consent, autonomous purchase within budget, explicit consent to increases/scoped counter resets, separate runtime caps, changed material terms, duplicate requests, timeout after commitment, pending/partial delivery and no unsupported refund promise. Unresolved purchases follow no-resend recovery.
-
-Do not treat generic store capabilities as platform payment or settlement requirements.
-
-**Appearance and gameplay state (§§16.4, 17.2).** Game-style default, player custom preference, declared format support and truthful selected/rendered state; unsupported selection yields a clear notice and identified default, not silent success. Enforce game-defined injury/death/action rules, distinguish service/authority failures and never invent revival capabilities. Local death does not alter cross-game identity or retained memory; separately authorized memory edits are not death effects.
-
-**Content security and privacy (§§4, 13, 15, 19).** Enforce source/audience and forwarding authority, including membership changes before delivery, private replay and truthful privacy receipts. For Agents or composed decision-making implementations, test matched benign/injected content, forged approvals, exfiltration requests and instruction-bearing recalled memory. Report legitimate-task completion and forbidden effects separately; neither refusing everything nor successful gameplay alone establishes useful, secure conformance.
-
-Include authenticated delivery of untrusted content, false clean-context assertions, protected planning inputs and derived disclosures, and authorized autonomous purchasing that remains usable in the presence of ordinary external content without allowing that content to change authority.
-
-**Cross-clause acceptance cases (§§10, 15.2.1, 16.6, 17.1, 18).** Applicable tests MUST also cover:
-
-- Rejection after target death, allegiance or healing-condition changes, safe observation updates and reassessment instead of unchanged retries.
-- Narrative-cursor rollback without load-generation reuse; retrieval filtering for ancestry, unknown provenance and derived summaries; independent memory-use and spoiler-disclosure choices, and provenance labels when prior experience is allowed.
-- Confirmation invalidation on timeout or changed conditions; only independently authorized behavior while waiting; same-target/intent cooldown enforcement, revalidation after state changes and game-side rate-limit feedback.
-- Authoritative budget reservations under concurrency, pending commitments and over-budget rejection; exclusion of real money, external wallets and high-value account assets from generic autonomous budgets; offering free text unable to alter player policies.
-- For adopted streaming extensions, shared object schemas across push and query, connection authentication and revocation, event duplication/backpressure and resynchronization; the minimum HTTP binding without negotiated streaming continues declared polling without claiming stream support.
-
-**Clarified contract boundaries (§§3, 5, 6, 9, 10, 11, 16.7, 17.1.1).** Applicable tests MUST also cover data-subject receipt queries versus results issued by the party that actually processed the data; confirmation before action acceptance and no double consumption on replay; read-family freshness versus lease replay; independently authorized result reads after scoped revocation; observation-reference perspective/schema bindings; recovery materialization equivalent to the current revision; target-association lifetime and withdrawal; and the declared recommendation-rate response to repeated opposition.
-
-These are implementation-conformance acceptance requirements to be executed, not claims that this textual revision implemented or ran the mechanisms.
+| Suite ID | Domain & clauses | Applicable roles / capabilities | Required positive, negative and fault coverage |
+| --- | --- | --- | --- |
+| `CONF-01` | Admission, authority & open access (§§1, 3–5, 7, 8, 12, 20) | All participants | Public vs. principal-filtered discovery; frozen `scope_digest` & consent narrowing via new Offer; unsupported required extension rejection; equal minimum criteria for first-party and third-party providers; standardized refusal codes with safe explanations (no hidden-fact or credential leaks); repeated refusals not treated as automatic ecosystem ban. |
+| `CONF-02` | Versioning, schema & wire encoding (§§2, 5, 7, 17–20) | All participants | Pinned offline schema bundle & unsupported required vocabulary rejection; lightweight `Envelope.extensions` without repeating `Scope` catalogues; deterministic HTTP status mapping (`200`/`400`/`401`/`403`/`404`/`409`/`413`/`429`/`503`/`504`) with `OperationReply` envelopes; `g2a-cjson-1` Unicode scalar key ordering, integer bounds, fixed-point units (no floats/negative zero), duplicate-key rejection; SSRF/redirect/DNS-rebinding defenses. |
+| `CONF-03` | Gameplay roles, coexistence & slot lifecycle (§§4.1, 8, 13.1, 13.2, 14.2) | Game Interaction Node, Game Agent | Game-declared slots (`companion`, `independent_npc`, or both); unoccupied companion slot & normal play without Agent; pure-NPC games without dummy companion slots; declared coexistence or exclusivity and active-role caps; strict per-role owner/perspective/grant/payer isolation; fencing old bindings before replacement; auto-entry, prompt, manual summon/dismissal, stopped observation on dismissal without memory erasure. |
+| `CONF-04` | Presence, offline boundary & two-tier recovery (§§11, 14.1, 14.2) | Game Interaction Node, Game Agent | Explicit exit & bounded silent-failure detection; Agent heartbeats unable to extend absent-player presence; immediate stop of associated companion or owner-bound AI NPC(s) when owning player leaves (even if other players remain); no offline continuation, scope borrowing or old-task auto-restart on re-entry; seamless `session.resume` within active lease prior to local fallback vs. mandatory player continuation decision after extended outage or fallback takeover; current-state-only recovery without disconnected gameplay backfill. |
+| `CONF-05` | Observations, baselines & timing (§§9, 10, 12, 16.2) | Observation profile (`push` / `observation.query`) | Push-only, `observation.query`-only and combined modes; stream-bound `snapshot` metadata and compact `delta` / `retract` frames; exact `base_revision` matching, coalescing without broken dependencies, epoch retirement and delayed-update rejection after retraction; per-record visibility transitions (`enter`, `create`, `leave_view`, `destroyed`, `unknown`); audience-filtered event sequence gaps vs. observation revisions; uncalibrated clocks, monotonic timeouts and queue-overflow gap reporting. |
+| `CONF-06` | Structured foundation & orthogonal modalities (§§9.5, 15.5) | Game Interaction Node, Game Agent | Mandatory `perception.structured` decision competence; independent negotiation and behavioral verification of optional `perception.visual` and `perception.audio`; structured-only operation when media feeds are absent or player-disabled; strict separation between game-environment audio (`perception.audio`) and player-companion voice chat (§15.5). |
+| `CONF-07` | Action execution, confirmation & reconciliation (§§10, 11, 16.6) | `actions` capability | Distinct definition, action and transport IDs; two-stage `confirmation_required` challenge handshake, atomic `action.confirm` consumption, no double consumption on replay, timeout abandonment and cooldown/rate-limit enforcement; observation-bound action preconditions & stale-target rejection; timeout/504 treated as `unknown` with mandatory `action.query` / `operation.get` reconciliation and default no-resend; partial-effect accounting on failure/cancellation. |
+| `CONF-08` | Autonomy, stopping & target invalidation (§§16.1, 16.2, 16.2.1, 16.7) | Companion Agents, Game Interaction Node | Objective-evidence requirement for multi-step completion; cross-game persistence of player-global autonomy level; inferred goals vs. explicit instructions & local corrections; three-stage stop/supersede handling (discard unsubmitted plans, `action.cancel` / fence unclaimed `pending` actions, let in-flight `executing` skills follow game rules); autonomous game emission of target-invalidation events across both streaming and poll-only bindings. |
+| `CONF-09` | Multiplayer interaction & confirmation policies (§§16.3, 16.3.1, 16.5) | Multiplayer / transfer / irreversible profiles | Recipient opt-in/out for proactive companion chat from other players' companions; game-enabled companion combat vs. explicit rejection; all three item-transfer policies with merged developer+player high-value designations; context-specific irreversible-action declarations (`allow` / `confirm` / `prohibit`) enforced at the effect boundary even after request submission. |
+| `CONF-10` | Runtime budgets & NPC cost ownership (§16.2) | Metered services, NPC-enabled games | Disclosed estimates vs. measured usage, reservations and cap-triggered pause without halting normal gameplay or autonomously raising caps; mandatory player/room-host payer binding for each active independent AI NPC, transparent attributable usage, and zero implicit cost splitting or transfer to other players. |
+| `CONF-11` | Optional store & purchase budgets (§§17.1, 17.1.1, 17.1.2) | Store profile | Structured attributes/prices with units, stage-dependent eligibility, price-change re-consent, declared recommendation-rate policy and session rate reduction after repeated explicit opposition; authoritative purchase-budget ledger with concurrency reservations, timeout retention, and strict exclusion of real-money/external-wallet/high-value account assets from autonomous budgets. |
+| `CONF-12` | Companion appearance & gameplay state (§§16.4, 17.2) | Appearance capability, gameplay state | Three-tier priority (`player forced override` > `game-default` > `companion-default`); explicit notice and labeled fallback/reselection on format incompatibility (never silent substitution); game-enforced injury/death rules without altering cross-game companion identity or retained memory. |
+| `CONF-13` | Memory governance, timelines & portability (§§15.1–15.7) | Memory-retaining Agents / providers | Developer-governed NPC memory vs. player-controlled companion memory; reload/branch `save_epoch` monotonicity, strict timeline retrieval isolation vs. labeled prior-branch experience, and independent soft spoiler/confidentiality preferences; player view/edit/delete and autonomous raw-record deletion without stale-cache resurrection; complete open-format export, player-selected migration scope, and truthful `imported` / `transformed` / `rejected` / `unresolved` receipts. |
+| `CONF-14` | Content security, injection & privacy receipts (§§4, 13, 15, 19) | All participants | Paired benign/prompt-injection vectors across dialogue, item descriptions, store text and recalled memory (reporting legitimate-task utility alongside zero unauthorized privilege/budget/recipient mutation); protected planning-only input isolation including summaries; data-subject `privacy.receipt` queries verified against authoritative processor status. |
 
 **Agent-quality evaluation, not an admission leaderboard.** Quality evaluations accompanying conformance claims MUST identify the game/environment build, scenario and initial-state fixture, model/provider revision where available, sampling/tool configuration, observation/action limits, time or token budget, termination criteria and trial count. Unavailable details MUST be disclosed, not invented. Reports MUST distinguish protocol violations, task failure, budget exhaustion and infrastructure failure without selectively suppressing failed trials.
 
@@ -1428,37 +1342,36 @@ Comparative claims SHOULD use matched conditions and report variability, latency
 | Existing design or SDK concept | Standard treatment |
 | --- | --- |
 | Existing `game.context` category/content/provenance | Preserve wire meaning; negotiate typed observation content as a profile |
-| Descriptor/Requested/Scope extensions | Keep support/proposal/frozen approval distinction |
-| Active extension value | Frozen configuration; never use as a changing observation payload |
-| Existing ActionResult | Preserve exact state/effect combinations and unknown reconciliation |
-| Session active/closed plus ready | Preserve existing fields; do not invent incompatible states |
+| Descriptor/Requested/Scope extensions | Keep support/proposal/frozen session-approval distinction; `Envelope.extensions` stays lightweight (`{}` by default) rather than repeating `Scope` schemas |
+| Stateless observation pulls (§9.6) | Mapped to candidate `observation.query` read operation without world effects or lease renewal |
+| Existing ActionResult & `action.confirm` | Preserve state/effect combinations; add structured `confirmation_required` challenge handshake before `pending` acceptance |
+| Session active/closed plus ready | Preserve existing fields; support seamless `session.resume` within active lease prior to local fallback |
 | Session event sequence | Recipient filtering may skip numbers; do not use as observation revision |
 | Contexts in recovery snapshot | New profile requires materialized per-stream state, not stale delta replay |
-| `core.session` feature catalogue labels | Reconcile with explicit role-by-capability applicability |
-| Inherited `core.events` text/event contracts | Preserve the claimed baseline's requirements; optional player-facing chat use does not silently redefine that feature |
-| Legacy operation-directory HTTP error mappings | Retain for legacy peers. The candidate g2a-http-json/draft-1 uses HTTP 200 for domain errors and 4xx/5xx for transport failures only when explicitly negotiated; this is a proposed binding change, not an unchanged mapping |
-| Inherited `Binding.kind` | Does not encode the new candidate identifier/version; freeze explicit negotiation without reusing an incompatible enum value |
-| `g2a-conformance-statement-1` | Inherited operation-level evidence format, not the complete clause/profile report required by section 21 |
-| SDK `0.1.0-dev` | Implementation under review, not a release of this specification |
-| New observation candidate | Requires contract/schema, vectors, implementation and independent review |
+| `core.session` & `relay.*` operations | Reconcile role-by-capability applicability; scope `relay.register/call/pull/reply/revoke` to outbound-relay bindings |
+| Inherited `core.events` vs. optional `chat` | Decouple `chat.send` / `player_chat.forward` into optional `chat` capability in new profiles while preserving baseline compatibility notes |
+| HTTP status code mapping | `g2a-http-json/draft-1` maps protocol error classes deterministically to HTTP `4xx`/`5xx` while always returning structured `OperationReply` JSON |
+| Inherited `Binding.kind` | Freeze explicit negotiation for `g2a-http-json/draft-1` and streaming extensions without reusing incompatible enum values |
+| `g2a-conformance-statement-1` | Upgrade from operation-only design evidence to cover `CONF-01`–`CONF-14` clause/profile reporting |
+| SDK `0.1.0-dev` | Experimental implementation under review, not a release of this specification |
 
-The next standardization steps are to freeze exact profile fields and digest domains; generate a complete English field catalogue from all operation contracts; reconcile role applicability metadata; finalize binding negotiation/authentication/status/header rules and the versioned conformance-report mapping; add observation and cross-role conformance vectors; and run independent peers and real games. Only then should a stable release claim be considered. SDK adaptation follows the reviewed standard rather than defining it implicitly.
+The next standardization steps are to freeze exact profile schemas and digest domains; generate a complete English field catalogue from reconciled operation contracts; finalize binding negotiation/authentication/header vectors and versioned `CONF-01`–`CONF-14` report schemas; and validate independent peers and real games before claiming a stable release.
 
 <a id="section-23"></a>
 
 ## 23. Illustrative scenarios
 
-**Turn-based companion.** The game advertises visible board and legal-move definitions. The player grants advice only. The agent receives an authorized snapshot and may chat but cannot execute a move. Granting a typed move action later requires approval; the game still checks whose turn it is at execution.
+**Turn-based companion.** The game advertises visible board and legal-move definitions. The player grants advice only. The agent receives an authorized snapshot and may chat (if `chat` is enabled) or advise, but cannot execute a move. Granting a typed move action later requires approval; the game still checks whose turn it is at execution.
 
-**Proactive combat companion.** The player authorizes combat assistance within the game's declared capabilities. An authorized observation reveals nearby enemies; the companion selects targets and legal attacks, replans as the encounter changes and helps until the objective is met or a stopping condition applies, without asking before every attack. When the player says stop, it schedules no further attacks, reconciles in-flight work, and reports any hit already committed rather than promising to undo it.
+**Proactive combat companion.** The player authorizes combat assistance within the game's declared capabilities. An authorized observation reveals nearby enemies; the companion selects targets and legal attacks, replans as the encounter changes and helps until the objective is met or a stopping condition applies, without asking before every attack. When the player says stop, it discards unsubmitted plans, immediately sends `action.cancel` (or triggers game-side fencing) for unclaimed `pending` actions, reconciles in-flight `executing` work, and reports any hit already committed rather than promising to undo it.
 
 **Fog-of-war tactical agent.** A view changes after a team switch. The authority retires the old visibility epoch, discards queued disclosure to the old audience and sends a fresh authorized snapshot. A delayed old delta is rejected even if its revision is numerically greater than the new stream's revision.
 
 **Action timeout.** A purchase or move request reaches the game, its effect is committed, and the response is lost. The Agent queries the original action and operation receipt. It does not resubmit with a new ID. If the authority cannot establish the result, it reports `unknown` and initiates reconciliation rather than claiming no effect.
 
-**Disconnected companion.** The associated player leaves or the declared presence deadline expires. New gameplay planning and actions stop; unsubmitted companion work is cancelled and in-flight effects are reconciled without promising rollback or zero residual token billing. Other online players and ordinary game simulation may continue. Reconnection establishes current presence and authority, reconciles outcomes and refreshes state under section 14.1 before any further gameplay; the previous task stays stopped until the player gives a new instruction. There is no offline activity mode or backlog replay.
+**Disconnected companion.** The associated player leaves or the declared presence deadline expires. New gameplay planning and actions stop; unsubmitted and unclaimed `pending` work is cancelled/fenced and in-flight effects are reconciled without promising rollback or zero residual token billing. Other online players and ordinary game simulation may continue. Reconnection establishes current presence and authority, reconciles outcomes and refreshes state under section 14.1 before any further gameplay; the previous task stays stopped until the player gives a new instruction.
 
-**AI service interruption while the player remains online.** The game continues with its declared local fallback. After service recovery, the companion receives only the current authorized state and reconciles outstanding action results; it does not receive a replay of the disconnected gameplay. The player's auto-entry preference does not replace the separate decision to continue after this interruption.
+**AI service interruption while the player remains online.** If a brief network blip resolves within the active lease before local fallback takes over, the companion uses `session.resume` to refresh current authorized state, reconcile in-flight actions and continue seamlessly without observation backfill. If the outage exceeds the lease or triggers the game's declared local fallback, gameplay continues under fallback and post-recovery continuation waits for the player's explicit decision rather than relying on entry auto-join preferences.
 
 **Observation revision trace (illustrative, not an executable vector).** Assume one authorized stream with fixed instance, world, perspective and schema bindings; `view-9` is the current visibility epoch. Each row follows the previous row:
 
@@ -1546,22 +1459,18 @@ This is a history of the specification text, not a protocol release log. It reco
 | Editorial revision | Date | Traceability and scope |
 | --- | --- | --- |
 | `standard-review-2026-11-13-r48` | 2026-11-13 | Committed bilingual review baseline, stored in Git commit `796778b8af2ff8c0c4a54a7434b4c6b5a74ad8ae` on 2026-11-14 |
-| `standard-review-2026-11-14-r70` | 2026-11-14 | Existing uncommitted bilingual input to this review; preserved before editing. Per-revision records for the intervening edits were not available for this review |
-| `standard-review-2026-11-14-r71` | 2026-11-14 | Synchronized comprehensive review described below; retains working-draft status and allocates no new wire version |
+| `standard-review-2026-11-14-r70` | 2026-11-14 | Uncommitted bilingual input prior to `r71` review (SHA-256: EN `e03ce510ab129bf5d7d9a5f3b9874f21697fd2557d46e463a70f4ce10f06029d`, ZH `901f5038e34e65f2768467ba55a695b46fc4b5e1c2cd720c1772282562b11765`) |
+| `standard-review-2026-11-14-r71` | 2026-11-14 | Synchronized review baseline stored in Git commit `81cb489eccecf538af697ddacd90d5e89436a7ba` on 2026-11-22 |
+| `standard-review-2026-11-22-r72` | 2026-11-22 | Architectural, state-machine, capability-boundary and editorial optimization summarized in section 25.1; retains working-draft status without allocating a new wire version |
 
-The `r70` input snapshots have these SHA-256 digests: English `e03ce510ab129bf5d7d9a5f3b9874f21697fd2557d46e463a70f4ce10f06029d`; Chinese `901f5038e34e65f2768467ba55a695b46fc4b5e1c2cd720c1772282562b11765`. They identify the actual review inputs, not a published release or a claim that every intermediate edit was audited separately.
-
-### 25.1 Changes in r71
+### 25.1 Changes in r72
 
 | Classification | Affected sections | Change and compatibility boundary |
 | --- | --- | --- |
-| Editorial and translation | Opening, 2–5, throughout | Add linked contents and stable cross-language section anchors; improve English grammar; align Chinese Action, generation, slot and Grant terminology and normative strength; distinguish request submission from effect commitment |
-| Baseline clarification | 2, 3, 5, 6, 22 | Distinguish candidate authority from inherited contracts; preserve claimed `core.events` obligations; clarify scoped revocation and independent result-read authority; correct privacy-operation callers and receipt-query direction |
-| Baseline clarification | 10, 11 | Separate definition, invocation and transport IDs; require applicable confirmation before acceptance; distinguish ordinary reads from deduplicated and lease-renewing operation families |
-| Candidate semantic clarification | 9, 23 | Separate effectful active sensing from information queries; retain perspective/schema context; establish current recovery baselines without requiring a new revision per read; define same-state materialization and illustrate revision/epoch handling |
-| Policy clarification and translation | 16.3.1, 16.5, 17.1.1 | Apply current policy before effect commitment even after request submission; align recommendation and price wording without changing the established player choices |
-| Additional testable profile obligations | 16.7, 17.1.1, 21 | Require explicit target/objective association lifetime and invalidation mapping, and a declared recommendation-rate policy; expand corresponding acceptance coverage. These obligations still require profile encoding and implementation evidence |
-| Examples and contract boundaries | 9.2, 18, 21–23 | Label observation placeholders; supply a schema-valid request; identify missing binding negotiation and conformance-report mappings; link exact canonicalization rules; add service-interruption and observation-trace explanations |
-| Versioning, references and traceability | 20, 24, 25 | Separate version identifiers; require bilingual revision synchronization; separate normative terminology from informative references; add JSON Schema Validation and preserve traceable input history |
+| Envelope & observation wire efficiency | 5, 7, 9.1, 9.2, 18, 22 | Decouple frozen session `Scope.extensions` from lightweight per-message `Envelope.extensions` (preventing multi-KB schema repetition per frame); bind stream digests on `snapshot` so `delta`/`retract` omit redundant digests; unify `retract` scope; specify integer/fixed-point units (`_ms`, `_bps`, declared scales) for continuous quantities under `g2a-cjson-1` |
+| Confirmation & stopping state-machine alignment | 6, 10, 14, 16.1, 16.6, 16.7, 23 | Add structured `confirmation_required` challenge handshake before `pending` acceptance; require `action.cancel` / game-side claim fencing for unclaimed `pending` actions on player stop or superseding instructions while `executing` actions follow game rules; clarify autonomous event-stream emission for target invalidations across streaming and poll-only bindings |
+| Catalogue completeness & HTTP error mapping | 3, 6, 9.6, 18, 22 | Introduce candidate stateless `observation.query` operation; decouple optional `chat` (`chat.send`, `player_chat.forward`) from `core.events`; explicitly scope `relay.*` operations to outbound-relay bindings; replace ambiguous HTTP 200 domain-error bundling with deterministic HTTP `4xx`/`5xx` status mapping carrying `OperationReply` JSON |
+| Role slots, modalities, recovery & appearance | 3.1, 9.5, 13.2, 14.2, 17.2, 23 | Replace hardcoded companion+NPC mutual exclusion and single-NPC cap with game-declared `Descriptor` slots, coexistence and concurrency limits (preserving default 1 companion per player, empty-slot playability and strict per-role isolation); split `perception.visual` and `perception.audio` into orthogonal optional capabilities; distinguish active-lease `session.resume` on brief network blips from post-outage/post-fallback manual continuation; restore three-tier appearance priority and explicit fallback labeling |
+| Editorial consolidation & conformance matrix | 2, 9–17, 21, 25 | Centralize draft/freeze disclaimers in sections 2, 20 and 22 to remove repetitive per-clause boilerplate; restructure section 21 into addressable conformance suites `CONF-01`–`CONF-14`; retain player/room-host NPC cost ownership (§16.2), store recommendation rate-reduction policy without mandatory off-switch (§17.1.1), offline prohibition (§14.1) and default no-resend rules (§11) |
 
-This revision changes only the two specification documents. It does not modify the SDK, inherited schemas, operation registry or runtime. Existing role-count, offline-activity, player-policy and game-authority decisions are retained. Human review, candidate-contract freezing, independent interoperability and production validation remain separate gates under sections 20–22.
+This revision updates the synchronized English and Chinese specification documents without altering existing `0.1.0-dev` SDK behavior or claiming frozen release certification.
