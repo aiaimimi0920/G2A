@@ -1,0 +1,523 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:g2a:candidate:memory-portability-draft-1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Export"
+    },
+    {
+      "$ref": "#/$defs/Selection"
+    },
+    {
+      "$ref": "#/$defs/Receipt"
+    }
+  ],
+  "$defs": {
+    "Context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "game_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "save_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "game_id",
+        "run_id",
+        "save_id"
+      ]
+    },
+    "Metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "conversation",
+            "scene",
+            "summary",
+            "preference",
+            "other"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "context": {
+          "$ref": "#/$defs/Context"
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source_kind": {
+              "enum": [
+                "player",
+                "game",
+                "agent",
+                "import",
+                "unknown"
+              ]
+            },
+            "source_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "player_edited": {
+              "type": "boolean"
+            },
+            "derived_from": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "source_kind",
+            "source_id",
+            "player_edited",
+            "derived_from"
+          ]
+        },
+        "associations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "access_constraints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "retention_constraints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "confidentiality_style": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extensions": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "created_at",
+        "updated_at",
+        "context",
+        "provenance",
+        "associations",
+        "access_constraints",
+        "retention_constraints",
+        "confidentiality_style",
+        "extensions"
+      ]
+    },
+    "Content": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "blob_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "media_type",
+        "text",
+        "blob_ids"
+      ]
+    },
+    "Record": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "record_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1
+            },
+            "state": {
+              "enum": [
+                "included"
+              ]
+            },
+            "metadata": {
+              "$ref": "#/$defs/Metadata"
+            },
+            "content": {
+              "$ref": "#/$defs/Content"
+            }
+          },
+          "required": [
+            "record_id",
+            "revision",
+            "state",
+            "metadata",
+            "content"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "record_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1
+            },
+            "state": {
+              "enum": [
+                "restricted",
+                "unavailable"
+              ]
+            },
+            "reason_code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "explanation": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "record_id",
+            "revision",
+            "state",
+            "reason_code",
+            "explanation"
+          ]
+        }
+      ]
+    },
+    "Blob": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "blob_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "state": {
+              "enum": [
+                "included"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^blobs/[A-Za-z0-9_-]+$"
+            },
+            "media_type": {
+              "type": "string",
+              "minLength": 1
+            },
+            "byte_length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "blob_id",
+            "state",
+            "path",
+            "media_type",
+            "byte_length",
+            "sha256"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "blob_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "state": {
+              "enum": [
+                "restricted",
+                "unavailable"
+              ]
+            },
+            "reason_code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "explanation": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "blob_id",
+            "state",
+            "reason_code",
+            "explanation"
+          ]
+        }
+      ]
+    },
+    "Export": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "enum": [
+            "memory-portability-draft-1"
+          ]
+        },
+        "export_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "companion_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "retained_record_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Record"
+          }
+        },
+        "blobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Blob"
+          }
+        }
+      },
+      "required": [
+        "profile",
+        "export_id",
+        "source_provider",
+        "subject_id",
+        "companion_id",
+        "snapshot_id",
+        "exported_at",
+        "retained_record_count",
+        "records",
+        "blobs"
+      ]
+    },
+    "Selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "enum": [
+            "memory-portability-draft-1"
+          ]
+        },
+        "selection_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "export_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_subject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "destination_provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "destination_subject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selected_record_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "profile",
+        "selection_id",
+        "export_sha256",
+        "source_subject",
+        "destination_provider",
+        "destination_subject",
+        "selected_record_ids"
+      ]
+    },
+    "Outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "record_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "imported",
+            "transformed",
+            "rejected",
+            "unresolved"
+          ]
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "destination_record_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "transformation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "record_id",
+        "status",
+        "reason_code",
+        "explanation",
+        "destination_record_ids",
+        "transformation"
+      ]
+    },
+    "Receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "enum": [
+            "memory-portability-draft-1"
+          ]
+        },
+        "selection_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "export_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "destination_provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "destination_subject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Outcome"
+          }
+        }
+      },
+      "required": [
+        "profile",
+        "selection_id",
+        "export_sha256",
+        "destination_provider",
+        "destination_subject",
+        "outcomes"
+      ]
+    }
+  }
+}

@@ -1,0 +1,1913 @@
+[
+  {
+    "id": "complete-inventory-with-explicit-restriction",
+    "accept": true,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "soft-confidentiality-does-not-forbid-export",
+    "accept": true,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "inventory-silent-omission",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "d3d0e7619822fc1504b6b99cfb7b17a64a98fe9af89f62455f8d59a5b73989ea",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "d3d0e7619822fc1504b6b99cfb7b17a64a98fe9af89f62455f8d59a5b73989ea",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "duplicate-record-id",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "ef04f003cf80ce7e3e20387235bc572919c7d7fd633a304eb72c6da38f8b534c",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "ef04f003cf80ce7e3e20387235bc572919c7d7fd633a304eb72c6da38f8b534c",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "wrong-destination",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "destination_provider": "other",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "missing-outcome",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "unselected-outcome",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "false-restricted-success",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "imported",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [
+              "bad"
+            ],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "integrity-mismatch",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "undeclared-blob",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": [
+                "b1"
+              ]
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "f524e476a6e74dc9e52b6b8145fff9822a2fecf088ebbd22a8f9a9f6e73741c7",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "f524e476a6e74dc9e52b6b8145fff9822a2fecf088ebbd22a8f9a9f6e73741c7",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "media-byte-integrity",
+    "accept": true,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": [
+                "b1"
+              ]
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": [
+          {
+            "blob_id": "b1",
+            "state": "included",
+            "path": "blobs/b1",
+            "media_type": "audio/ogg",
+            "byte_length": 3,
+            "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+          }
+        ]
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "eb3ca6a88790bd39f888ff88e529780d678fb5d15b7d2b26e0c7bb34451d74ef",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "eb3ca6a88790bd39f888ff88e529780d678fb5d15b7d2b26e0c7bb34451d74ef",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {
+        "blobs/b1": "616263"
+      }
+    }
+  },
+  {
+    "id": "corrupt-media",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": [
+                "b1"
+              ]
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": [
+          {
+            "blob_id": "b1",
+            "state": "included",
+            "path": "blobs/b1",
+            "media_type": "audio/ogg",
+            "byte_length": 3,
+            "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+          }
+        ]
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "eb3ca6a88790bd39f888ff88e529780d678fb5d15b7d2b26e0c7bb34451d74ef",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "eb3ca6a88790bd39f888ff88e529780d678fb5d15b7d2b26e0c7bb34451d74ef",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {
+        "blobs/b1": "00"
+      }
+    }
+  },
+  {
+    "id": "missing-media-not-full-success",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": [
+                "b1"
+              ]
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": [
+          {
+            "blob_id": "b1",
+            "state": "unavailable",
+            "reason_code": "lost",
+            "explanation": "Media unavailable at export."
+          }
+        ]
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "435cf36d22f25c8ea9a57df68a1f8c093f7fdb998a32bb87883c8a72d6bb1180",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "435cf36d22f25c8ea9a57df68a1f8c093f7fdb998a32bb87883c8a72d6bb1180",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "missing-media-truthful-partial-import",
+    "accept": true,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": [
+                "b1"
+              ]
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": [
+          {
+            "blob_id": "b1",
+            "state": "unavailable",
+            "reason_code": "lost",
+            "explanation": "Media unavailable at export."
+          }
+        ]
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "435cf36d22f25c8ea9a57df68a1f8c093f7fdb998a32bb87883c8a72d6bb1180",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "435cf36d22f25c8ea9a57df68a1f8c093f7fdb998a32bb87883c8a72d6bb1180",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "transformed",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": "Text imported without missing audio; metadata preserved."
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "transformation-not-described",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "transformed",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "unknown-top-level-field",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ],
+        "automatic_consent": true
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "invalid-timestamp",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "yesterday",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "80152969c0ce74c002f6432c0c394a6bd1f7884dd12f14c45ecb23436fbdb1ec",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "80152969c0ce74c002f6432c0c394a6bd1f7884dd12f14c45ecb23436fbdb1ec",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "unknown-selected-id",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r404"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "duplicate-selected-id",
+    "accept": false,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 2,
+        "records": [
+          {
+            "record_id": "r1",
+            "revision": "1",
+            "state": "included",
+            "metadata": {
+              "kind": "conversation",
+              "created_at": "2026-11-13T00:00:00Z",
+              "updated_at": "2026-11-13T00:00:00Z",
+              "context": {
+                "game_id": "game-a",
+                "run_id": "run-1",
+                "save_id": null
+              },
+              "provenance": {
+                "source_kind": "player",
+                "source_id": "speaker-1",
+                "player_edited": false,
+                "derived_from": []
+              },
+              "associations": [],
+              "access_constraints": [],
+              "retention_constraints": [],
+              "confidentiality_style": "Prefer private conversation; not a hard migration prohibition.",
+              "extensions": {}
+            },
+            "content": {
+              "media_type": "text/plain",
+              "text": "We completed game A together.",
+              "blob_ids": []
+            }
+          },
+          {
+            "record_id": "r2",
+            "revision": "1",
+            "state": "restricted",
+            "reason_code": "disclosure_not_authorized",
+            "explanation": "Inventory stub only; content cannot be exported to this recipient."
+          }
+        ],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": [
+          "r1",
+          "r1"
+        ]
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "1a5101871264e53058ad57219318f621b8a060003599123c84aee2297a6283b1",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": [
+          {
+            "record_id": "r1",
+            "status": "imported",
+            "reason_code": "ok",
+            "explanation": "Retained with metadata.",
+            "destination_record_ids": [
+              "dest-1"
+            ],
+            "transformation": null
+          },
+          {
+            "record_id": "r2",
+            "status": "rejected",
+            "reason_code": "source_restricted",
+            "explanation": "No source content available.",
+            "destination_record_ids": [],
+            "transformation": null
+          }
+        ]
+      },
+      "blob_hex": {}
+    }
+  },
+  {
+    "id": "empty-retained-inventory",
+    "accept": true,
+    "case": {
+      "export": {
+        "profile": "memory-portability-draft-1",
+        "export_id": "exp-1",
+        "source_provider": "provider-a",
+        "subject_id": "player-a",
+        "companion_id": "companion-1",
+        "snapshot_id": "snapshot-1",
+        "exported_at": "2026-11-13T00:00:00Z",
+        "retained_record_count": 0,
+        "records": [],
+        "blobs": []
+      },
+      "selection": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "9759087a89e5100ace5da08878b37ea41e3cb0979955c01974ddfd2e1e1a090e",
+        "source_subject": "player-a",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "selected_record_ids": []
+      },
+      "receipt": {
+        "profile": "memory-portability-draft-1",
+        "selection_id": "sel-1",
+        "export_sha256": "9759087a89e5100ace5da08878b37ea41e3cb0979955c01974ddfd2e1e1a090e",
+        "destination_provider": "provider-b",
+        "destination_subject": "player-b",
+        "outcomes": []
+      },
+      "blob_hex": {}
+    }
+  }
+]

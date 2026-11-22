@@ -1,0 +1,21 @@
+PASS complete-inventory-with-explicit-restriction
+PASS soft-confidentiality-does-not-forbid-export
+PASS inventory-silent-omission
+PASS duplicate-record-id
+PASS wrong-destination
+PASS missing-outcome
+PASS unselected-outcome
+PASS false-restricted-success
+PASS integrity-mismatch
+PASS undeclared-blob
+PASS media-byte-integrity
+PASS corrupt-media
+PASS missing-media-not-full-success
+PASS missing-media-truthful-partial-import
+PASS transformation-not-described
+PASS unknown-top-level-field
+PASS invalid-timestamp
+PASS unknown-selected-id
+PASS duplicate-selected-id
+PASS empty-retained-inventory
+20 candidate vectors passed; no live provider/interoperability certification.
