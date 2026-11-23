@@ -1,7 +1,6 @@
-# G2A standard review
+# G2A Protocol Specification (`V0.0.1`)
 
-Read [G2A Specification](G2A_SPECIFICATION.md), the primary English review draft.
+- English Specification: [G2A_SPECIFICATION.md](G2A_SPECIFICATION.md) (`V0.0.1`)
+- 中文协议规范：[G2A_SPECIFICATION.zh-CN.md](G2A_SPECIFICATION.zh-CN.md)（`V0.0.1`）
 
-This is a proposed open game interaction standard, not a released wire version or SDK conformance claim. It builds on the existing g2a-design-1 contracts and distinguishes inherited semantics from the new observation profile candidate.
-
-The earlier Chinese [semantic notes](SPECIFICATION.md) and [observation notes](OBSERVATIONS.md) are non-normative working materials retained for history. Where they differ, use the English review draft; they are not additional independent normative requirements.
+`V0.0.1` is the initial baseline specification of the open Game-to-Agent Interaction Protocol across **Interaction Origin**, **Intelligent Hub**, and **Computation Core**. Earlier notes in [SPECIFICATION.md](SPECIFICATION.md) and [OBSERVATIONS.md](OBSERVATIONS.md) are retained solely as historical archive materials and are superseded by `G2A_SPECIFICATION.md` / `G2A_SPECIFICATION.zh-CN.md`.
