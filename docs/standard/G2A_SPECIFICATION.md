@@ -190,25 +190,29 @@ The table below distinguishes what each major game genre possesses versus lacks,
 
 Operating strictly over local loopback or an isolated backend channel, the **Origin Interface** comprises four genre-universal primitives:
 
-| Origin Primitive | Direction | Normative Responsibility |
-| --- | --- | --- |
-| `origin.capabilities` | `Origin → Hub` | Sync the static capability table upon entry (or new system unlock), assigning stable IDs (`#01..#N`), descriptions, permitted `actor` scopes, JSON Schema parameter definitions, and risk flags. |
-| `origin.sync` | `Origin → Hub` | Push full or incremental updates: (1) **concise state brief** (avatar status, management ledger snapshot, or newly unlocked clue state) and (2) **available method IDs** (per-`actor` `ready` / `staged` status and context anchors), bound to monotonic `rev`. |
-| `origin.player_event` | `Origin → Hub` | Report verified player-seat signals: explicit player task commands, queue confirmation decisions, online/offline transitions, or emergency stop signals. |
-| `origin.execute` | `Hub → Origin` | Execute a validated method ID and arguments directly at the domain-effect layer on `actor`, bypassing input/animation mutexes: instantaneous actions return terminal status (`succeeded` / `failed`), whereas sustained actions (long pathfinding, hyperdrive charge-up, or holding a co-op pressure plate) enter an interruptible `executing` state (responsive to cancel → `cancelled`) before settling to terminal status and advancing the queue. |
+| Origin Primitive (Direction) | Core Responsibility |
+| --- | --- |
+| `origin.capabilities` (`Origin → Hub`) | Sync the static capability table upon entry or unlock (`#01..#N`, `actor` scopes, JSON Schemas). |
+| `origin.sync` (`Origin → Hub`) | Push full or incremental **concise state briefs** and **available method IDs** (`ready` / `staged`), bound to `rev`. |
+| `origin.player_event` (`Origin → Hub`) | Report verified player-seat task commands, queue approvals, presence shifts, or stop signals. |
+| `origin.execute` (`Hub → Origin`) | Bypass input/animation locks on `actor` and execute a validated single-step domain effect directly. |
+
+- **Single-Step Execution Lifecycle:** `origin.execute` returns terminal status (`succeeded` / `failed`) immediately for instantaneous actions, whereas sustained actions (long pathfinding, hyperdrive charge-up, or holding a co-op pressure plate) enter an interruptible `executing` state (responsive to cancel → `cancelled`) before settling to terminal status and advancing the queue.
 
 ### 3.4 Core Interface (`Intelligent Hub` ↔ `Computation Core`)
 
-The **Core Interface** organizes cross-network governance into four primitive groups (player confirmation **MUST** occur exclusively via a trusted player-consent channel at the **Intelligent Hub** and **MUST NOT** be invokable by the **Computation Core**):
+The **Core Interface** organizes cross-network governance around capability caching, active-method projection, and call queues (player confirmation **MUST** occur exclusively via a trusted player-consent channel at the **Intelligent Hub** and **MUST NOT** be invokable by the **Computation Core**):
 
-| Group | Core Operations | Normative Semantics |
-| --- | --- | --- |
-| **Session & Scope** | `session.authorize` | Negotiate version and `Scope` (bound by an RFC 8785 digest), establish the session upon player consent, and sync the capability table (or verify cached digest). |
-| | `session.heartbeat` / `resume` / `close` | Renew the **Computation Core** lease (never extending absent-player presence), resume after brief blips, or idempotently close the session and fence remaining queues. |
-| **State & Methods** | `context.push` / `context.pull` | Push with player commands or allow periodic pulls of the **concise state brief + projected active method IDs** (`ready`/`staged` subset only; for long-running desktop idle, virtual-pet, or slow-paced sims, **SHOULD** adaptively throttle into sleep while no significant event threshold is crossed and player input is idle, avoiding wasted inference). Visual (`visual`) and audio (`audio`) feeds remain optional player-toggled modules. |
-| **Call Queues** | `queue.submit` | Submit an ordered **Method Call Queue** with unique `queue_id`, `based_on_rev`, trigger type (player command vs. proactive), and optional `supersedes` flag, including single-step queues. |
-| | `queue.cancel` / `queue.query` | Halt remaining undispatched or `executing` steps, or query authoritative per-step progress and player confirmation status after a timeout. |
-| **Dialogue** | `chat.send` | (Optional module) Send text or voice replies bounded by recipient audience and AI provenance tags (pure deduction companions may enable dialogue + board annotations alone). |
+| Core Primitive | Normative Semantics |
+| --- | --- |
+| `session.authorize` | Negotiate version and frozen `Scope` digest; establish session upon player consent and sync capabilities. |
+| `session.heartbeat` / `resume` / `close` | Renew control lease (never extending absent-player presence), resume blips, or idempotently close session. |
+| `context.push` / `context.pull` | Push with player commands or pull the **concise state brief + projected active (`ready`/`staged`) method IDs**. |
+| `queue.submit` | Submit an ordered **Method Call Queue** with `queue_id`, `based_on_rev`, trigger type, and optional `supersedes`. |
+| `queue.cancel` / `queue.query` | Halt remaining undispatched or `executing` steps, or query per-step progress and approval status on timeout. |
+| `chat.send` | (Optional module) Send text or voice messages bounded by recipient audience and AI provenance tags. |
+
+- **Idle Throttling and Orthogonal Modalities:** For long-running desktop idle, virtual-pet, or slow-paced simulation games, `context.push` / `context.pull` **SHOULD** adaptively throttle into sleep while no significant event threshold is crossed and player input is idle, avoiding wasted inference; visual (`visual`) and audio (`audio`) feeds remain optional player-toggled modules.
 
 <a id="section-4"></a>
 
